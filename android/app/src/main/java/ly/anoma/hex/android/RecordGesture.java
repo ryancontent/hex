@@ -6,18 +6,21 @@ final class RecordGesture {
     static final long HOLD_MILLIS = 350;
     private boolean startedOnPress;
     private boolean pressed;
+    private boolean finishingOnPress;
     private long downAt;
     Action down(long time, boolean recording, boolean finishing) {
-        pressed = !finishing;
-        startedOnPress = pressed && !recording;
+        pressed = true;
+        finishingOnPress = finishing;
+        startedOnPress = !finishing && !recording;
         downAt = time;
-        return !pressed ? Action.NONE : recording ? Action.STOP : Action.START;
+        return startedOnPress ? Action.START : Action.NONE;
     }
     Action up(long time, boolean inside) {
         if (!pressed) return Action.NONE;
         pressed = false;
         if (!inside) return Action.CANCEL;
-        return startedOnPress && time - downAt >= HOLD_MILLIS ? Action.STOP : Action.NONE;
+        if (finishingOnPress) return Action.NONE;
+        return !startedOnPress || time - downAt >= HOLD_MILLIS ? Action.STOP : Action.NONE;
     }
     Action cancel() {
         boolean wasPressed = pressed;

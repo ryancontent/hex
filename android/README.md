@@ -3,9 +3,9 @@
 An independent native Android experiment for a Pixel 8 Pro (Android 12+).
 Keep Gboard or your preferred keyboard. Hex shows a floating button only when a
 supported text field has input focus **and its keyboard is open**, using an
-explicitly enabled Accessibility service. Version `0.3.0-poc` fixes
-stop-after-end-of-speech handling, hint-only fields, and hidden-keyboard
-visibility. The APK does not register an input method.
+explicitly enabled Accessibility service. Version `0.4.0-poc` puts every
+recording/processing indication into one fixed-size button. The APK does not
+register an input method.
 
 ## Try it
 
@@ -26,7 +26,11 @@ Install the debug APK, open **Hex POC**, then:
    or leave the field and the button disappears entirely. Your keyboard stays unchanged.
 5. **Tap** the button to start and **tap again** to finish. Or **hold** it while
    speaking and **release** to finish (350 ms distinguishes a hold from a tap).
-   Slide off before releasing, or tap **×**, to cancel.
+   Slide off before releasing to cancel, including a locked recording or processing.
+   The same button changes from a green dot to a red stop symbol while recording,
+   then an ellipsis while processing. It never expands or adds another floating
+   control. A brief checkmark confirms insertion; an amber exclamation and a
+   system toast explain a failure.
 6. Final words are inserted at the cursor, replacing only selected text. If you
    change fields, close the keyboard, edit text, move the cursor, or lock the screen during capture,
    Hex cancels rather than applying the result elsewhere. Password fields hide
@@ -68,7 +72,9 @@ end-of-speech notification no longer disables that stop gesture. If the speech
 service returns a final result early, Hex holds it until you finish instead of
 inserting while your finger is still down. Ordinary partials are never treated
 as final text. Once you stop, the button shows an ellipsis while waiting for the
-final result; recognition/insertion failures show a short status message.
+final result. Recording and processing use the same button's color/symbol, with
+no separate status panel or transcript preview. Accessibility state descriptions
+retain the phase/error information for screen readers.
 
 ## Build and install
 

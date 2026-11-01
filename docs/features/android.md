@@ -18,8 +18,10 @@ Focus a supported text field with keyboard open  // android.dictation
 ├── Small floating button -> above the keyboard, near the right edge
 │   ├── Tap -> record; next tap -> finish
 │   ├── Hold >= 350 ms -> record; release -> finish
-│   └── Slide off / × -> cancel
-├── On-device recognizer -> partial preview -> confirmed final text
+│   └── Slide off the same button -> cancel (recording or processing)
+├── One fixed button: green dot -> red stop symbol -> processing ellipsis
+│   └── Same bounds throughout; no separate recording icon, panel, or cancel button
+├── On-device recognizer -> confirmed final text (no floating transcript preview)
 │   └── Same field, text and selection -> splice at cursor / replace selection
 ├── Changed field/text/selection, closed keyboard, lock screen, interrupted service -> cancel
 ├── Keyboard closed / password / unsupported editor / no focused editable field -> hide
@@ -54,6 +56,12 @@ End-of-speech does not mean the user requested stop. Explicit stop/release still
 calls `stopListening` after that callback. A terminal result arriving early is
 held until the user stops; it is not inserted mid-hold. A hint-only empty editor
 has a uniquely known cursor at zero even if Accessibility reports `-1`.
+The single floating button is 60 dp in every phase. Successful insertion briefly
+shows a checkmark in that button; failures use an amber exclamation there and a
+short system toast. Phase/error text remains an Accessibility state description,
+not another floating view. A locked-recording stop commits on pointer release,
+so sliding outside the button can cancel before insertion. A normal tap during
+processing does not start another job; sliding off can still cancel it.
 
 ## Checks and observed proof
 
@@ -131,3 +139,22 @@ That experiment is not passing microphone-to-field proof, and its cause was not
 established. Physical voice capture and compatibility with Messages/T3 Code on
 the user's Pixel remain unverified by these automated runs; the supplied-PCM
 check must not be presented as proof of that path.
+
+## Version 0.4 single-button verification
+
+On November 1, 2026, the final 0.4 build passed all **19 JVM tests and 15 emulator
+instrumentation tests**, including the real-model supplied-PCM tap/hold flow,
+offline recognizer test, and real-service virtual-microphone startup/cancellation.
+APK assembly and lint passed with no lint errors. The added UI check counts
+exactly one clickable control in exactly one Hex overlay window and verifies
+identical visible bounds while idle, recording, processing, and after insertion.
+It also verifies the old status panel and cancel control are absent. Separate
+tests cancel locked recording and pending processing by sliding off that same
+button. A delayed test-only recognizer keeps processing pending so cancellation
+is tested before a final result can commit.
+
+Idle, recording, and processing emulator screenshots were visually reviewed:
+one green dot, red stop symbol, and grey ellipsis respectively, all in the same
+circular button above Gboard. Android's system microphone privacy indicator
+remains system-owned; Hex does not create a second recording overlay. These UI
+checks do not expand the physical-microphone proof stated above.

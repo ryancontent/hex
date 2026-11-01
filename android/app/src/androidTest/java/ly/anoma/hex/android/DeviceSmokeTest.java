@@ -88,7 +88,7 @@ public class DeviceSmokeTest {
         shell("service call speech_recognition 2 i32 1 s16 ly.anoma.hex.android.poc.test "
                 + "s16 ly.anoma.hex.android.EarlyResultRecognitionService");
         device.findObject(By.desc("Start Hex dictation")).click();
-        assertTrue(device.wait(Until.hasObject(By.text("Speech ready. Tap Stop or release to insert.")), 5_000));
+        assertTrue(waitForButtonState("Speech ready. Tap Stop or release to insert.", 5_000));
         assertEquals("Hello world", device.findObject(By.desc("External first field")).getText());
         device.findObject(By.desc("Stop Hex dictation")).click();
         assertTrue(device.wait(Until.hasObject(By.text("Hello lovely world")), 5_000));
@@ -144,8 +144,9 @@ public class DeviceSmokeTest {
                 InstrumentationRegistry.getArguments().getString("microphoneProof", "false").equals("true"));
         openExternalEditor();
         device.findObject(By.desc("Start Hex dictation")).click();
-        assertTrue(device.wait(Until.hasObject(By.text("Listening… Speak, then tap Stop.")), 10_000));
-        device.findObject(By.desc("Cancel Hex dictation")).click();
+        assertTrue(waitForButtonState("Listening… Speak, then tap Stop.", 10_000));
+        var point = device.findObject(By.desc("Stop Hex dictation")).getVisibleCenter();
+        device.swipe(point.x, point.y, point.x - Surface.dp(context, 100), point.y, 15);
         assertTrue(device.wait(Until.hasObject(By.desc("Start Hex dictation")), 5_000));
         assertEquals("Hello world", device.findObject(By.desc("External first field")).getText());
     }
@@ -156,6 +157,114 @@ public class DeviceSmokeTest {
         assertFalse(Arrays.asList(info.requestedPermissions).contains(Manifest.permission.INTERNET));
         for (var service : info.services) assertNotEquals("android.permission.BIND_INPUT_METHOD", service.permission);
         assertTrue(SpeechSession.request("en-US").getBooleanExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false));
+    }
+    @Test public void oneFixedButtonShowsIdleRecordingProcessingAndSuccess() throws Exception {
+        openExternalEditor();
+        substituteRecognizer("SlowFixtureRecognitionService");
+        var idle = device.findObject(By.desc("Start Hex dictation"));
+        android.graphics.Rect bounds = idle.getVisibleBounds();
+        assertEquals("●", idle.getText());
+        assertOneFloatingControl();
+        saveButtonProof("idle");
+        idle.click();
+        assertTrue(device.wait(Until.hasObject(By.desc("Stop Hex dictation")), 5_000));
+        var recording = device.findObject(By.desc("Stop Hex dictation"));
+        assertEquals(bounds, recording.getVisibleBounds());
+        assertEquals("■", recording.getText());
+        assertOneFloatingControl();
+        saveButtonProof("recording");
+        recording.click();
+        assertTrue(device.wait(Until.hasObject(By.desc("Hex is transcribing")), 5_000));
+        var processing = device.findObject(By.desc("Hex is transcribing"));
+        assertEquals(bounds, processing.getVisibleBounds());
+        assertEquals("…", processing.getText());
+        assertOneFloatingControl();
+        saveButtonProof("processing");
+        assertTrue(device.wait(Until.hasObject(By.text("Hello lovely world")), 8_000));
+        assertEquals(bounds, device.findObject(By.desc("Start Hex dictation")).getVisibleBounds());
+        assertOneFloatingControl();
+    }
+    @Test public void slidingOffTheSameButtonCancelsLockedRecording() throws Exception {
+        openExternalEditor();
+        substituteRecognizer();
+        device.findObject(By.desc("Start Hex dictation")).click();
+        assertTrue(device.wait(Until.hasObject(By.desc("Stop Hex dictation")), 5_000));
+        var point = device.findObject(By.desc("Stop Hex dictation")).getVisibleCenter();
+        device.swipe(point.x, point.y, point.x - Surface.dp(context, 100), point.y, 15);
+        assertTrue(device.wait(Until.hasObject(By.desc("Start Hex dictation")), 5_000));
+        assertEquals("Hello world", device.findObject(By.desc("External first field")).getText());
+    }
+    @Test public void slidingOffTheSameButtonCancelsProcessing() throws Exception {
+        openExternalEditor();
+        substituteRecognizer("SlowFixtureRecognitionService");
+        device.findObject(By.desc("Start Hex dictation")).click();
+        assertTrue(device.wait(Until.hasObject(By.desc("Stop Hex dictation")), 5_000));
+        device.findObject(By.desc("Stop Hex dictation")).click();
+        assertTrue(device.wait(Until.hasObject(By.desc("Hex is transcribing")), 5_000));
+        var point = device.findObject(By.desc("Hex is transcribing")).getVisibleCenter();
+        device.swipe(point.x, point.y, point.x - Surface.dp(context, 100), point.y, 15);
+        assertTrue(device.wait(Until.hasObject(By.desc("Start Hex dictation")), 5_000));
+        assertEquals("Hello world", device.findObject(By.desc("External first field")).getText());
+    }
+    private void saveButtonProof(String phase) throws Exception {
+        if (!InstrumentationRegistry.getArguments().getString("captureButtonProof", "false").equals("true")) return;
+        java.io.File file = new java.io.File(context.getExternalFilesDir(null), "single-button-" + phase + ".png");
+        device.takeScreenshot(file);
+        shell("cp " + file.getAbsolutePath() + " /data/local/tmp/single-button-" + phase + ".png");
+    }
+    private boolean waitForButtonState(String expected, long timeout) {
+        long deadline = android.os.SystemClock.uptimeMillis() + timeout;
+        do {
+            for (var window : automation().getWindows()) {
+                if (window.getType() != android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) continue;
+                var root = window.getRoot();
+                if (root == null) continue;
+                boolean matched = containsState(root, expected);
+                root.recycle();
+                if (matched) return true;
+            }
+            android.os.SystemClock.sleep(100);
+        } while (android.os.SystemClock.uptimeMillis() < deadline);
+        return false;
+    }
+    private boolean containsState(android.view.accessibility.AccessibilityNodeInfo node, String expected) {
+        if (expected.contentEquals(node.getStateDescription() == null ? "" : node.getStateDescription())) return true;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            var child = node.getChild(i);
+            if (child == null) continue;
+            boolean matched = containsState(child, expected);
+            child.recycle();
+            if (matched) return true;
+        }
+        return false;
+    }
+    private void assertOneFloatingControl() {
+        int controls = 0;
+        int windows = 0;
+        for (var window : automation().getWindows()) {
+            if (window.getType() != android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) continue;
+            var root = window.getRoot();
+            if (root == null) continue;
+            if (context.getPackageName().contentEquals(root.getPackageName())) {
+                windows++;
+                controls += countControls(root);
+            }
+            root.recycle();
+        }
+        assertEquals("Exactly one Hex overlay window", 1, windows);
+        assertEquals("Exactly one clickable control", 1, controls);
+        assertFalse(device.hasObject(By.desc("Cancel Hex dictation")));
+        assertFalse(device.hasObject(By.desc("Hex dictation status")));
+    }
+    private int countControls(android.view.accessibility.AccessibilityNodeInfo node) {
+        int result = node.isClickable() ? 1 : 0;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            var child = node.getChild(i);
+            if (child == null) continue;
+            result += countControls(child);
+            child.recycle();
+        }
+        return result;
     }
     @Test public void realOnDevicePcmIsInsertedThroughProductionSessionOnStop() throws Exception {
         org.junit.Assume.assumeTrue("Requires a prepared offline language",
@@ -214,8 +323,11 @@ public class DeviceSmokeTest {
         shell("settings put secure accessibility_enabled 1");
     }
     private void substituteRecognizer() throws Exception {
+        substituteRecognizer("FixtureRecognitionService");
+    }
+    private void substituteRecognizer(String service) throws Exception {
         String response = shell("service call speech_recognition 2 i32 1 s16 "
-                + "ly.anoma.hex.android.poc.test s16 ly.anoma.hex.android.FixtureRecognitionService");
+                + "ly.anoma.hex.android.poc.test s16 ly.anoma.hex.android." + service);
         assertFalse(response, response.contains("Exception"));
     }
     private void restore(String key, String value) throws Exception {

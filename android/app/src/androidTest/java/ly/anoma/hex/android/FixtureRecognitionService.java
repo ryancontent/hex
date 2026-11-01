@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Test APK only. Exercises system binding and overlay delivery without pretending to recognize audio. */
-public final class FixtureRecognitionService extends RecognitionService {
+public class FixtureRecognitionService extends RecognitionService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Callback pending;
     @Override protected void onStartListening(Intent request, Callback callback) {
@@ -36,8 +36,9 @@ public final class FixtureRecognitionService extends RecognitionService {
                 callback.partialResults(partial);
                 callback.results(new Bundle());
             } catch (RemoteException disconnected) { /* The editor may have gone away. */ }
-        }, 250);
+        }, resultDelayMillis());
     }
+    protected long resultDelayMillis() { return 750; }
     @Override protected void onCancel(Callback callback) { pending = null; handler.removeCallbacksAndMessages(null); }
     @Override public void onDestroy() { handler.removeCallbacksAndMessages(null); super.onDestroy(); }
 }

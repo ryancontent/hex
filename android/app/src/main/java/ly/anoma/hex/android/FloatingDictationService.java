@@ -15,6 +15,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.graphics.PixelFormat;
+import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -30,8 +31,7 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
 import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.widget.Toast;
 
 /** A system-bound Accessibility overlay. Never changes the selected input method or clipboard. */
 public final class FloatingDictationService extends AccessibilityService {
@@ -40,10 +40,11 @@ public final class FloatingDictationService extends AccessibilityService {
     private final RecordGesture gesture = new RecordGesture();
     private final Runnable refresh = this::refreshTarget;
     private SpeechSession speech;
-    private LinearLayout bubble;
-    private TextView status;
+    private Button bubble;
+    private String status = "Ready to dictate";
     private Button microphone;
-    private Button cancelButton;
+    private GradientDrawable buttonBackground;
+    private int buttonColor;
     private WindowManager manager;
     private WindowManager.LayoutParams placement;
     private AccessibilityNodeInfo target;
@@ -55,7 +56,8 @@ public final class FloatingDictationService extends AccessibilityService {
     private boolean attached;
     private boolean connected;
     private boolean pointerClick;
-    private long messageUntil;
+    private long feedbackUntil;
+    private boolean errorFeedback;
     private int lastX = -1, lastY = -1, lastWidth = -1, lastHeight = -1;
     private SharedPreferences preferences;
     private final SharedPreferences.OnSharedPreferenceChangeListener preferenceChange = (prefs, key) -> scheduleRefresh();
@@ -77,10 +79,10 @@ public final class FloatingDictationService extends AccessibilityService {
         createBubble();
         speech = new SpeechSession(this, new SpeechSession.Listener() {
             @Override public void status(String text) {
-                status.setText(text);
+                status = text;
                 if (!speech.active()) renderMessage(); else render();
             }
-            @Override public void partial(String text) { status.setText(text.isEmpty() ? "Listening…" : text); render(); }
+            @Override public void partial(String text) { /* Final text is handled by SpeechSession; no separate preview. */ }
             @Override public void result(String text, long millis) { insert(text); }
             @Override public void finished() {
                 stopForeground(STOP_FOREGROUND_REMOVE);
@@ -141,7 +143,7 @@ public final class FloatingDictationService extends AccessibilityService {
                 || !unchanged(next))) {
             cancelRecording();
             if (next != null) {
-                status.setText("Field or cursor changed. Dictation cancelled.");
+                status = "Field or cursor changed. Dictation cancelled.";
                 renderMessage();
             }
         }
@@ -174,7 +176,7 @@ public final class FloatingDictationService extends AccessibilityService {
         refreshTarget();
         if (target == null || !new Preferences(this).enabled()) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            status.setText("Allow microphone in Hex setup.");
+            status = "Allow microphone in Hex setup.";
             renderMessage();
             return;
         }
@@ -183,25 +185,25 @@ public final class FloatingDictationService extends AccessibilityService {
         selectionEnd = selectionEnd(target);
         if (FieldInsertion.prepare(original, selectionStart, selectionEnd, "test") == null) {
             original = null;
-            status.setText("This field doesn’t expose its cursor. Try another field.");
+            status = "This field doesn’t expose its cursor. Try another field.";
             renderMessage();
             return;
         }
         recordingTarget = AccessibilityNodeInfo.obtain(target);
-        messageUntil = 0;
+        feedbackUntil = 0;
         token = generation.begin();
         try {
             PendingIntent setup = PendingIntent.getActivity(this, 0, new Intent(this, SetupActivity.class),
                     PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             Notification notification = new Notification.Builder(this, "dictation")
                     .setSmallIcon(R.drawable.hex_icon).setContentTitle("Hex dictation")
-                    .setContentText("Use the floating button to finish or cancel.")
+                    .setContentText("Tap the floating button to finish; slide off it to cancel.")
                     .setOngoing(true).setContentIntent(setup).build();
             startForeground(41, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
             speech.start(new Preferences(this).language());
         } catch (RuntimeException unavailable) {
             cancelRecording();
-            status.setText("Microphone couldn’t start. Open Hex setup and check permission.");
+            status = "Microphone couldn’t start. Open Hex setup and check permission.";
             renderMessage();
         }
         render();
@@ -213,7 +215,7 @@ public final class FloatingDictationService extends AccessibilityService {
             if (!generation.consume(token) || !new Preferences(this).enabled()) return;
             if (current == null || !current.refresh() || !supported(current) || recordingTarget == null
                     || !recordingTarget.equals(current) || !unchanged(current)) {
-                status.setText("Field or cursor changed. Nothing inserted.");
+                status = "Field or cursor changed. Nothing inserted.";
                 renderMessage();
                 return;
             }
@@ -222,7 +224,7 @@ public final class FloatingDictationService extends AccessibilityService {
             Bundle args = new Bundle();
             args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, result.text());
             if (!current.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
-                status.setText("This app refused insertion. Try another field.");
+                status = "This app refused insertion. Try another field.";
                 renderMessage();
                 return;
             }
@@ -230,7 +232,7 @@ public final class FloatingDictationService extends AccessibilityService {
             cursor.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, result.cursor());
             cursor.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, result.cursor());
             current.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, cursor);
-            status.setText("Inserted · on-device");
+            status = "Inserted · on-device";
             renderMessage();
         } finally { if (current != null) current.recycle(); }
     }
@@ -258,21 +260,18 @@ public final class FloatingDictationService extends AccessibilityService {
     }
 
     private void createBubble() {
-        bubble = Surface.column(this);
-        int pad = Surface.dp(this, 4);
-        bubble.setPadding(pad, pad, pad, pad);
-        GradientDrawable background = new GradientDrawable();
-        background.setColor(Surface.BACKGROUND);
-        background.setCornerRadius(Surface.dp(this, 24));
-        bubble.setBackground(background);
-        bubble.setElevation(Surface.dp(this, 8));
-        status = Surface.text(this, "", 14, false);
-        status.setContentDescription("Hex dictation status");
-        status.setMaxLines(3);
-        bubble.addView(status);
-        LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.RIGHT);
-        microphone = Surface.button(this, "●", view -> {
+        microphone = new Button(this);
+        bubble = microphone; // The overlay contains exactly this one control.
+        microphone.setAllCaps(false);
+        microphone.setGravity(Gravity.CENTER);
+        microphone.setPadding(0, 0, 0, 0);
+        microphone.setTextColor(Surface.BACKGROUND);
+        microphone.setElevation(Surface.dp(this, 8));
+        buttonBackground = new GradientDrawable();
+        buttonBackground.setShape(GradientDrawable.OVAL);
+        buttonBackground.setStroke(Surface.dp(this, 2), Surface.BACKGROUND);
+        microphone.setBackground(buttonBackground);
+        microphone.setOnClickListener(view -> {
             if (!pointerClick && speech != null && !speech.finishing()) {
                 if (speech.active()) speech.stop(); else startRecording();
             }
@@ -293,13 +292,8 @@ public final class FloatingDictationService extends AccessibilityService {
             }
             return true;
         });
-        cancelButton = Surface.button(this, "×", view -> cancelRecording());
-        cancelButton.setContentDescription("Cancel Hex dictation");
-        row.addView(cancelButton, new LinearLayout.LayoutParams(Surface.dp(this, 52), Surface.dp(this, 60)));
-        row.addView(microphone, new LinearLayout.LayoutParams(Surface.dp(this, 60), Surface.dp(this, 60)));
-        bubble.addView(row);
-        placement = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        placement = new WindowManager.LayoutParams(Surface.dp(this, 60),
+                Surface.dp(this, 60), WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
         placement.gravity = Gravity.TOP | Gravity.RIGHT;
@@ -310,22 +304,28 @@ public final class FloatingDictationService extends AccessibilityService {
     private void render() {
         boolean active = speech != null && speech.active();
         boolean finishing = active && speech.finishing();
-        String label = finishing ? "…" : active ? "■" : "●";
+        boolean feedback = SystemClock.uptimeMillis() < feedbackUntil;
+        String label = finishing ? "…" : active ? "■" : feedback ? (errorFeedback ? "!" : "✓") : "●";
         if (!label.contentEquals(microphone.getText())) microphone.setText(label);
         String description = finishing ? "Hex is transcribing" : active ? "Stop Hex dictation" : "Start Hex dictation";
         if (!description.contentEquals(microphone.getContentDescription() == null ? "" : microphone.getContentDescription()))
             microphone.setContentDescription(description);
-        cancelButton.setVisibility(active ? View.VISIBLE : View.GONE);
-        boolean message = SystemClock.uptimeMillis() < messageUntil;
-        status.setVisibility(active || message ? View.VISIBLE : View.GONE);
-        placement.width = Surface.dp(this, active || message ? 240 : 68);
+        int color = finishing ? Surface.MUTED : active ? Color.rgb(255, 145, 145)
+                : feedback && errorFeedback ? Color.rgb(244, 200, 136) : Surface.ACCENT;
+        if (buttonColor != color) { buttonBackground.setColor(color); buttonColor = color; }
+        String state = active || feedback ? status : "Ready to dictate";
+        if (!state.contentEquals(microphone.getStateDescription() == null ? "" : microphone.getStateDescription()))
+            microphone.setStateDescription(state);
         position();
     }
 
     private void renderMessage() {
-        messageUntil = SystemClock.uptimeMillis() + 4_000;
+        errorFeedback = !status.equals("Inserted · on-device");
+        long duration = errorFeedback ? 4_000 : 1_200;
+        feedbackUntil = SystemClock.uptimeMillis() + duration;
+        if (errorFeedback) Toast.makeText(this, status, Toast.LENGTH_SHORT).show();
         render();
-        handler.postDelayed(() -> { if (connected) render(); }, 4_010);
+        handler.postDelayed(() -> { if (connected) render(); }, duration + 10);
     }
 
     private void position() {
@@ -340,7 +340,7 @@ public final class FloatingDictationService extends AccessibilityService {
             }
         }
         bubble.measure(View.MeasureSpec.makeMeasureSpec(placement.width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                View.MeasureSpec.makeMeasureSpec(placement.height, View.MeasureSpec.EXACTLY));
         placement.x = Surface.dp(this, 12);
         placement.y = Math.max(Surface.dp(this, 48), bottom - bubble.getMeasuredHeight() - Surface.dp(this, 12));
         int height = bubble.getMeasuredHeight();

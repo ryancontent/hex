@@ -9,8 +9,8 @@ public class RecordGestureTest {
         RecordGesture gesture = new RecordGesture();
         assertEquals(START, gesture.down(0, false, false));
         assertEquals(NONE, gesture.up(100, true));
-        assertEquals(STOP, gesture.down(500, true, false));
-        assertEquals(NONE, gesture.up(600, true));
+        assertEquals(NONE, gesture.down(500, true, false));
+        assertEquals(STOP, gesture.up(600, true));
     }
     @Test public void holdStopsOnRelease() {
         RecordGesture gesture = new RecordGesture();
@@ -29,5 +29,16 @@ public class RecordGestureTest {
         RecordGesture gesture = new RecordGesture();
         assertEquals(NONE, gesture.down(0, true, true));
         assertEquals(NONE, gesture.up(800, true));
+    }
+    @Test public void slidingOffTheSameButtonCancelsALockedRecordingBeforeStopCommits() {
+        RecordGesture gesture = new RecordGesture();
+        assertEquals(NONE, gesture.down(0, true, false));
+        assertEquals(CANCEL, gesture.up(200, false));
+        assertEquals(NONE, gesture.up(300, true));
+    }
+    @Test public void slidingOffAlsoCancelsProcessingWithoutStartingAnotherRecording() {
+        RecordGesture gesture = new RecordGesture();
+        assertEquals(NONE, gesture.down(0, true, true));
+        assertEquals(CANCEL, gesture.up(200, false));
     }
 }

@@ -127,7 +127,8 @@ public final class SetupActivity extends Activity {
         root.addView(Surface.text(this,
                 "Enable Hex floating dictation in Accessibility settings. Your keyboard stays selected. "
                 + "Focus a text field: tap the floating button to start and tap again to finish, "
-                + "or hold it while speaking and release to finish. Slide off the button to cancel.", 15, false));
+                + "or hold it while speaking and release to finish. Slide off the button to cancel. "
+                + "The same button turns red while recording and shows an ellipsis while processing.", 15, false));
         root.addView(Surface.text(this,
                 "Accessibility lets Hex find the selected field and insert at its cursor. "
                 + "When you start recording, Hex reads that field’s text and selection to preserve existing words. "
