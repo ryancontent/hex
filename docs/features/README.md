@@ -37,7 +37,7 @@ default) shows each card's raw WER or CER with its language, dataset, source,
 and conditions (#647).
 The [vocabulary](vocabulary.md) biases transcription toward names you list.
 [Android phone dictation](android.md) is a separate sideloadable proof of concept
-for a Pixel, with an opt-in voice keyboard and the device's on-device recognizer.
+for a Pixel, with an opt-in floating dictation button and the device's on-device recognizer.
 Its checks and physical-device proof limits are tracked separately.
 [Annotate](capture.md) (macOS, Linux,
 and Windows) records the screen while you draw and talk and sends it to an agent.

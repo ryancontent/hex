@@ -1,80 +1,94 @@
-# Android phone dictation (proof of concept)
+# Android floating dictation (proof of concept)
 
-This standalone Android app/keyboard targets a personal Pixel 8 Pro experiment;
-it is not part of the macOS, Linux, or Windows application. Android 12+ is the
-compiled minimum. No Play Store release, physical Pixel verification, or
-Parakeet backend is claimed. Build and sideload instructions:
+A standalone Android 12+ experiment for a personal Pixel 8 Pro. It keeps the
+user's keyboard and adds an opt-in Accessibility overlay; no Play Store release,
+Parakeet backend, or physical Pixel coverage is claimed. Setup/build instructions:
 [`android/README.md`](../../android/README.md).
 
 ```ts
-Install the debug APK                     // android.setup
-├── Open Hex POC -> Labs -> Experimental dictation (off by default)
-├── Allow microphone -> Android's runtime permission prompt
-├── Check readiness -> device, permission, service, installed offline languages
-│   ├── No on-device service -> say unavailable; no default recognizer fallback
-│   └── Missing language -> Prepare offline language -> Android-managed download
-├── Dictate here -> partial preview -> final words in the practice field
-└── Enable Hex keyboard -> Android settings -> Choose keyboard
+Open Hex POC                             // android.setup
+├── Labs -> Experimental dictation (off by default)
+├── Allow microphone -> Android runtime permission prompt
+├── Check readiness -> service and installed offline languages
+│   └── Prepare offline language -> explicit Android-managed download if needed
+└── Enable floating dictation -> explanation -> Android Accessibility settings
+    └── Enable Hex floating dictation; leave Gboard / current keyboard selected
 
-Focus a text field with Hex selected      // android.dictation
-├── Dictate -> recheck Labs and microphone permission -> on-device recognizer
-│   ├── Password -> refuse
-│   ├── Partial -> preview only
-│   ├── Stop or Android endpointer -> final -> insert once at the current cursor
-│   └── Missing language, busy service, audio error, or timeout -> explicit retry
-├── Cancel / field change / keyboard hidden -> cancel; invalidate late results
-└── Keyboards -> Android's picker -> return to the user's normal keyboard
+Focus a supported text field             // android.dictation
+├── Small floating button -> above the keyboard, near the right edge
+│   ├── Tap -> record; next tap -> finish
+│   ├── Hold >= 350 ms -> record; release -> finish
+│   └── Slide off / × -> cancel
+├── On-device recognizer -> partial preview -> confirmed final text
+│   └── Same field, text and selection -> splice at cursor / replace selection
+├── Changed field/text/selection, lock screen, interrupted service -> cancel
+├── Password / unsupported editor / no focused editable field -> hide
+└── Labs off -> cancel and hide; Accessibility off -> disconnect service
 ```
 
-Sources: [`SetupActivity`](../../android/app/src/main/java/ly/anoma/hex/android/SetupActivity.java),
+Sources: [`FloatingDictationService`](../../android/app/src/main/java/ly/anoma/hex/android/FloatingDictationService.java),
+[`RecordGesture`](../../android/app/src/main/java/ly/anoma/hex/android/RecordGesture.java),
+[`FieldInsertion`](../../android/app/src/main/java/ly/anoma/hex/android/FieldInsertion.java),
 [`SpeechSession`](../../android/app/src/main/java/ly/anoma/hex/android/SpeechSession.java),
-[`HexKeyboard`](../../android/app/src/main/java/ly/anoma/hex/android/HexKeyboard.java),
-[`EditorSession`](../../android/app/src/main/java/ly/anoma/hex/android/EditorSession.java),
 [`FinalTranscript`](../../android/app/src/main/java/ly/anoma/hex/android/FinalTranscript.java),
-and [`AndroidManifest.xml`](../../android/app/src/main/AndroidManifest.xml).
+[`SetupActivity`](../../android/app/src/main/java/ly/anoma/hex/android/SetupActivity.java),
+and the [`manifest`](../../android/app/src/main/AndroidManifest.xml).
 
-Google's on-device service can send `final_result: true` in a partial callback,
-then an empty completion. Hex retains only these explicitly confirmed utterances
-as a fallback for an empty completion; an ordinary partial is never inserted.
-The normal completion text, when present, remains authoritative.
+The service does not alter the default input method or use the clipboard. It
+detects a focused editable node, but reads its text/selection only after the
+user starts a job. It stores that snapshot only until completion/cancellation,
+then refreshes and validates focus, text, and selection before `ACTION_SET_TEXT`.
+The returned action and a cursor-restoration action can fail. This is not an
+atomic editor transaction; an app edit racing the final action remains a limit.
+Custom editors must expose editable nodes, selection, and text-setting support;
+rich-text preservation is unproven. Disabling Labs gates the actual capture and
+removes the overlay, not just a settings row.
 
-The manifest requests microphone access and no Internet permission. The only
-recognizer factory is `createOnDeviceSpeechRecognizer`; preparation is a separate
-explicit action that may download a language. Hex does not persist audio or
-transcripts. The platform speech service owns recognition and model storage.
+The app requests microphone and microphone foreground-service permissions, not
+Internet permission. It uses only `createOnDeviceSpeechRecognizer`. Preparation
+is an explicit action that may download a language; recording is scoped to the
+gesture/toggle, a 60-second deadline, and a 15-second finish deadline. No audio or
+transcript files are written. Google's `final_result: true` partials are retained
+for an empty completion; ordinary partials are never promoted to inserted text.
 
-Checks: [`EditorSessionTest`](../../android/app/src/test/java/ly/anoma/hex/android/EditorSessionTest.java)
-covers invalidation on editor changes/cancel, duplicate and stale final results,
-and insertion spacing. [`FinalTranscriptTest`](../../android/app/src/test/java/ly/anoma/hex/android/FinalTranscriptTest.java)
-covers final-marked partials, unfinished tails, and authoritative completion.
+## Checks and observed proof
+
 [`DeviceSmokeTest`](../../android/app/src/androidTest/java/ly/anoma/hex/android/DeviceSmokeTest.java)
-checks actual app/IME startup, Labs opt-in, and the manifest/offline-request
-contract. Its insertion check uses a temporary test-only recognition service,
-not inference. [`OfflineSpeechTest`](../../android/app/src/androidTest/java/ly/anoma/hex/android/OfflineSpeechTest.java)
-is an explicit opt-in real-model check over synthetic PCM with no active network.
+exercises the installed Accessibility service and overlay over a separate
+editor APK/process: tap/tap, hold/release, cursor insertion preserving existing
+text, field-change cancellation, password hiding, Labs-off hiding, and keeping
+the input method unchanged. A temporary test-only recognition service supplies
+results; these checks do not establish microphone capture or acoustic accuracy.
+JVM tests cover selection splicing, gesture semantics, stale/duplicate jobs, and
+final-result handling.
 
-## Observed verification
+The overlay revision passed six emulator UI checks and all 16 JVM tests on
+November 1, 2026, with the API 35 Google Play ARM64 image. Tap/tap and hold/release
+both inserted `lovely` into `Hello world` at its cursor to produce `Hello lovely
+world`, while Gboard stayed selected. Field-change cancellation, password hiding,
+Labs-off hiding, the Labs default, and the manifest contract were checked.
+The APK build and lint passed (no lint errors; localization/dependency warnings
+remain). A separate explicit `microphoneProof` run used Google's real on-device
+service from the overlay while the external editor was foreground: it reached
+the listening callback and cancellation left the field untouched. The emulator
+was launched with host audio disabled, so this proves virtual-microphone/service
+startup, not physical audio capture or transcription of spoken words.
+The final combined run passed all eight instrumentation tests (six UI/contract
+checks plus the real-service virtual-microphone and real-model PCM checks), all
+16 JVM tests, APK assembly/signature verification, and lint with no errors.
 
-On November 1, 2026, on an Apple silicon Mac with Android SDK emulator 37.2.13,
-Pixel 8 Pro device profile, Android 15 / API 35 Google Play ARM64 system image:
+The earlier real-model `OfflineSpeechTest` passed on November 1, 2026, with Android
+SDK emulator 37.2.13, an Android 15 / API 35 Google Play ARM64 image and a Pixel 8
+Pro device profile. After Android downloaded `en-US`, Wi-Fi and mobile data were
+disabled and the test asserted no active network. Actual output from synthetic
+PCM was **“A quick brown fox jumps over the lazy Dog”**, for reference **“The quick
+brown fox jumps over the lazy dog.”** The test permits that article substitution
+while requiring the remaining phrase; this is not a zero-error accuracy claim.
+The speech backend remains the same in the overlay revision. This PCM-source
+check bypasses the physical microphone and does not prove Pixel speed or quality.
 
-- Debug APK build, all nine JVM tests, and Android lint passed (no lint errors;
-  English-only strings and dependency-version recommendations remain warnings).
-- All four `DeviceSmokeTest` instrumentation checks passed, including actual
-  final-text insertion through the installed keyboard and a real `InputConnection`.
-  That insertion used the test-only recognition service; it was not a microphone
-  recording or real-model inference. The default run skipped the separate
-  real-model test as intended.
-- Real-model `OfflineSpeechTest` passed after the app's preparation flow downloaded
-  the `en-US` language. Both emulator Wi-Fi and mobile data were disabled; the
-  test asserted `ConnectivityManager.getActiveNetwork()` was null.
-- Actual recognition from the synthetic fixture was **“A quick brown fox jumps
-  over the lazy Dog”**, for reference speech **“The quick brown fox jumps over the
-  lazy dog.”** This establishes offline recognition, with an opening-article
-  substitution; it is not a zero-error accuracy claim. The test permits that
-  article substitution while requiring the rest of the phrase.
-
-The PCM-source test bypasses a physical microphone. It does not establish that
-the Pixel has the model installed or measure its speed, battery use, or quality.
-Remaining physical proof: offline speech on the Pixel with networking disabled,
-latency, microphone interruptions, routing, and insertion into third-party apps.
+Remaining physical proof: offline Pixel microphone capture, routing, latency,
+battery use, interruptions, gesture comfort, and insertion in the user's apps.
+Android may require **Allow restricted settings** in App info before a sideloaded
+Accessibility service can be enabled. The desktop Rune UI and its goldens do not
+cover this independent Android surface.

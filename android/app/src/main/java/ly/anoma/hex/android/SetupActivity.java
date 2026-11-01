@@ -11,7 +11,6 @@ import android.speech.ModelDownloadListener;
 import android.speech.RecognitionSupport;
 import android.speech.RecognitionSupportCallback;
 import android.speech.SpeechRecognizer;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -47,7 +46,7 @@ public final class SetupActivity extends Activity {
         root.addView(Surface.text(this, "Hex for Android", 30, true));
         root.addView(Surface.text(this, "Pixel proof of concept", 17, false));
         root.addView(Surface.text(this,
-                "Speak here or use the Hex keyboard in another app. Recognition runs on this device; "
+                "Keep your keyboard. Dictate from a floating button above it in other apps. Recognition runs on this device; "
                 + "Hex does not save recordings or transcripts.", 15, false));
         root.addView(Surface.text(this, "Labs", 20, true));
         Switch enable = new Switch(this);
@@ -101,7 +100,7 @@ public final class SetupActivity extends Activity {
         practice.setSaveEnabled(false);
         practice.setTextColor(Surface.INK);
         practice.setHintTextColor(Surface.MUTED);
-        practice.setHint("Words appear here. Also try this field with the Hex keyboard.");
+        practice.setHint("Words appear here. You can also use the floating Hex button.");
         practice.setContentDescription("Dictation practice field");
         practice.setMinLines(2);
         practice.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
@@ -133,18 +132,22 @@ public final class SetupActivity extends Activity {
 
         root.addView(Surface.text(this, "Use in other apps", 20, true));
         root.addView(Surface.text(this,
-                "Enable Hex in Android’s keyboard settings, then choose it from the keyboard picker. "
-                + "Tap Dictate in a text field. Use Keyboards to return to Gboard.", 15, false));
-        root.addView(Surface.button(this, "Enable Hex keyboard", view ->
-                startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))));
-        root.addView(Surface.button(this, "Choose keyboard", view ->
-                getSystemService(InputMethodManager.class).showInputMethodPicker()));
+                "Enable Hex floating dictation in Accessibility settings. Your keyboard stays selected. "
+                + "Focus a text field: tap the floating button to start and tap again to finish, "
+                + "or hold it while speaking and release to finish. Slide off the button to cancel.", 15, false));
+        root.addView(Surface.text(this,
+                "Accessibility lets Hex find the selected field and insert at its cursor. "
+                + "When you start recording, Hex reads that field’s text and selection to preserve existing words. "
+                + "It does not save or send them. Password fields are excluded. "
+                + "If you edit or change fields during recording, Hex cancels the result.", 14, false));
+        root.addView(Surface.button(this, "Enable floating dictation", view ->
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
         root.addView(Surface.text(this, "Proof limits", 20, true));
         root.addView(Surface.text(this,
-                "No Parakeet, background recording, or desktop sync in this build. "
+                "No Parakeet or desktop sync in this build. Some custom text fields do not support Accessibility insertion. "
                 + "Speech availability and languages depend on the phone’s installed speech service. "
                 + "Language setup may download a model; dictation has no cloud fallback. "
-                + "An emulator without an on-device recognizer can only test setup and keyboard behavior.", 14, false));
+                + "An emulator without an on-device recognizer can only test setup and overlay behavior.", 14, false));
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setBackgroundColor(Surface.BACKGROUND);

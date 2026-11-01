@@ -1,90 +1,106 @@
-# Hex for Android — Pixel proof of concept
+# Hex for Android — floating dictation proof of concept
 
-An independent native Android app and voice keyboard, aimed first at a Pixel 8
-Pro. Android 12 / API 31 or later is required. This is a sideloadable experiment,
-not an Android release or a port of the desktop runtime.
+An independent native Android experiment for a Pixel 8 Pro (Android 12+).
+Keep Gboard or your preferred keyboard. Hex shows a floating button when a
+supported text field has input focus, using an explicitly enabled Accessibility
+service. Version `0.2.0-poc` replaces the earlier keyboard-based experiment;
+the APK no longer registers an input method.
 
-## What this proves
+## Try it
 
-- An app with a practice field and a system-wide voice input method.
-- Explicit Labs opt-in, off on a fresh install, checked at recognition start.
-- Microphone permission requested in the app, never implicitly from a keyboard.
-- `SpeechRecognizer.createOnDeviceSpeechRecognizer` exclusively. If Android has
-  no on-device service or selected language, report it; never create the default
-  potentially network-backed recognizer. The APK has no Internet permission.
-- Partial text shown in Hex; only final text committed through `InputConnection`.
-  Google's explicitly final-marked partials are retained until completion; an
-  ordinary partial is never promoted when completion contains no text.
-- Cancel, keyboard hiding, and editor changes invalidate the recording. Late
-  results cannot be inserted into a newly focused field. Password fields refuse
-  dictation. Recognition owns audio capture; Hex writes no audio or transcript
-  files and has no transcript history.
-- Recording has a 60-second deadline; finishing has a 15-second deadline. Android
-  may endpoint sooner. The status reports stop-to-result time when available.
+Install the debug APK, open **Hex POC**, then:
 
-The existing iPhone Swift/Core ML code is not linked. This does **not** establish
-Parakeet quality, Pixel performance, long-form recording, background recording,
-Bluetooth behavior, formatting styles, desktop sync, or broad Android support.
-The speech service and its installed languages are supplied by the device.
+1. Turn on **Labs → Experimental dictation** (off on a fresh install).
+2. **Allow microphone**. Use **Check readiness** to inspect the on-device speech
+   service and installed offline languages. Start with `en-US`, or save another
+   BCP-47 language tag. **Prepare offline language** requests an Android-managed
+   model download; recheck readiness after it finishes.
+3. Read the Accessibility explanation and tap **Enable floating dictation**.
+   Under Android Accessibility settings, enable **Hex floating dictation**.
+   A sideloaded APK can encounter Android's restricted-settings protection:
+   if blocked, open Hex POC's App info, use the menu's **Allow restricted
+   settings** option if offered, then return to Accessibility settings.
+4. Open a text field in another app. A small green Hex button appears above
+   the keyboard near the right edge. The keyboard itself stays unchanged.
+5. **Tap** the button to start and **tap again** to finish. Or **hold** it while
+   speaking and **release** to finish (350 ms distinguishes a hold from a tap).
+   Slide off before releasing, or tap **×**, to cancel.
+6. Final words are inserted at the cursor, replacing only selected text. If you
+   change fields, edit text, move the cursor, or lock the screen during capture,
+   Hex cancels rather than applying the result elsewhere. Password fields hide
+   the button. Disable Labs to hide it everywhere, or disable the Accessibility
+   service to disconnect Hex from other apps.
 
-## Build
+Language setup may use the network. Dictation exclusively uses Android's
+`createOnDeviceSpeechRecognizer`; there is no default/cloud recognizer fallback
+and no Internet permission. Hex writes no recordings or transcripts. The speech
+service and models belong to Android. Try with Wi-Fi and mobile data off after
+the offline language has been installed.
 
-Install JDK 17 and the Android SDK (platform 35, build-tools 35.0.0,
-platform-tools). Set `ANDROID_HOME` to the SDK directory, or set `sdk.dir` in an
-untracked `local.properties`. The Gradle wrapper pins 8.11.1 and verifies its
-distribution with SHA-256.
+## Accessibility and limits
+
+Accessibility is needed to detect the focused editable field, draw a
+`TYPE_ACCESSIBILITY_OVERLAY`, and use `ACTION_SET_TEXT` to insert words while
+preserving the surrounding text. No clipboard or keyboard switching is used.
+The service reads the focused field's text and selection **after you start a
+recording**, retains them only until that job finishes/cancels, and checks them
+again immediately before insertion. It does not log or send them. A microphone
+foreground-service notification is used only while dictation is active.
+
+Only visible, enabled, non-password editable fields exposing `ACTION_SET_TEXT`
+and a valid selection are supported. Some custom editors/WebViews do not expose
+these APIs, so the bubble can be absent or insertion can be refused. Accessibility
+text replacement is not an atomic editor transaction: the fresh focus/text/
+selection check reduces stale insertion risk, but an app edit racing the final
+action cannot be made atomic with this API. Large fields require replacing their
+full accessible text; no universal rich-text preservation is claimed.
+
+No Parakeet, desktop sync, always-listening microphone, or Play Store release.
+Physical Pixel microphone behavior, latency, battery use, Bluetooth routing,
+and compatibility with the user's apps remain to be checked.
+
+## Build and install
+
+JDK 17, Android SDK platform 35, build-tools 35.0.0, and platform-tools are needed.
+Set `JAVA_HOME` and `ANDROID_HOME`, or set `sdk.dir` in an untracked
+`local.properties`. The Gradle wrapper pins 8.11.1 with a SHA-256 checksum.
 
 ```sh
 cd android
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
-# A connected emulator is sufficient for setup/keyboard smoke checks:
-./gradlew :app:connectedDebugAndroidTest
-```
-
-APK: `app/build/outputs/apk/debug/app-debug.apk`.
-Package: `ly.anoma.hex.android.poc` (separate from other Hex builds).
-
-## Try it on the Pixel
-
-```sh
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n ly.anoma.hex.android.poc/ly.anoma.hex.android.SetupActivity
 ```
 
-1. Turn on **Labs → Experimental dictation** and **Allow microphone**.
-2. Start with `en-US` (or save another BCP-47 language tag). **Check readiness**
-   lists installed offline languages when the device supports that query.
-3. If necessary, **Prepare offline language** requests a download through
-   Android. Model preparation can use the network; a request is not proof that
-   the model has finished downloading. Recheck readiness afterward.
-4. Tap **Dictate here**, speak, and tap **Stop** if Android has not already
-   detected the end of the sentence. Confirm the words appear in the field.
-5. Tap **Enable Hex keyboard**, enable Hex in Android settings, then use
-   **Choose keyboard**. Open a text field in another app and tap **Dictate**.
-   Use **Keyboards** in Hex to switch back to Gboard.
-6. With the offline language ready, turn off Wi-Fi and mobile data and repeat.
-   This is the physical offline-recognition proof, not just an API flag check.
-7. Cancel a recording, switch apps or fields mid-recording, and hide the
-   keyboard. Confirm no late text appears in another field.
+Package: `ly.anoma.hex.android.poc`. Updating the earlier debug APK preserves
+its settings and removes the old keyboard component. Android chooses an available
+keyboard if the removed Hex keyboard was previously selected; Hex does not set
+the default input method. Uninstall Hex POC to remove it. Android-managed speech
+models may remain.
 
-To remove: switch back to Gboard and uninstall Hex POC. It creates no external
-files. Android may keep language packs managed by its own speech service.
+## SDK verification
 
-## Emulator and proof limits
+```sh
+./gradlew :app:connectedDebugAndroidTest
+```
 
-SDK emulators may lack the on-device service found on a Pixel. In that case the
-correct outcome is an unavailable-service message, not a cloud fallback.
-`DeviceSmokeTest` exercises the installed app and real input method, Labs gate,
-and manifest/request contract. Its insertion test temporarily substitutes a
-recognition service from the **test APK only** through Android's test-service
-hook, sends a known final result, and confirms that the real IME commits it to
-the practice field. That service does not recognize audio and is reset in a
-`finally` block (Android also expires it after 60 seconds). JVM tests cover editor
-generations, cancellation, duplicate results, insertion spacing, and final-text
-handling.
+`DeviceSmokeTest` preserves the selected input method and existing Accessibility
+settings. It enables Hex's service **on the test device**, keeps other
+Accessibility services running, opens an editor in a separate APK/process, and
+tests actual overlay tap/hold gestures and cursor insertion. A test-APK-only
+recognition service supplies known results through Android's temporary test
+hook, reset in cleanup (and automatically expired after 60 seconds). These UI
+checks are not real-microphone or inference proof. JVM tests cover gestures,
+selection splicing, generations/cancellation, and final-text handling.
 
-`OfflineSpeechTest` is a separate opt-in **real-model** check. Prepare `en-US`
-through the app, disable the emulator's Wi-Fi and mobile data, then run:
+An optional `DeviceSmokeTest#realOnDeviceServiceCanOpenEmulatorMicrophoneFromOverlay`
+check, enabled with `-Pandroid.testInstrumentationRunnerArguments.microphoneProof=true`,
+uses the real service to reach listening from the overlay over the external
+editor, then cancels. Run it on a prepared emulator with host audio disabled;
+it is virtual-microphone startup proof, not a physical recording or accuracy check.
+
+For a separate real-model test, prepare `en-US`, disable emulator Wi-Fi and mobile
+data, then explicitly opt in:
 
 ```sh
 ./gradlew :app:connectedDebugAndroidTest \
@@ -92,13 +108,7 @@ through the app, disable the emulator's Wi-Fi and mobile data, then run:
   -Pandroid.testInstrumentationRunnerArguments.offlineProof=true
 ```
 
-It asserts there is no active network, feeds a synthetic 16 kHz PCM fixture to
-Android's actual on-device service through the public audio-source API, and
-requires the expected phrase. The opening article may be recognized as `the`
-or `a`; the actual observed transcript is recorded in the feature map. The
-default test run skips this check because models and service implementations
-are device-managed. It proves offline inference from supplied audio, not the
-physical microphone path, Pixel speed, or general accuracy.
-
-Observed runs and remaining proof belong in
+It asserts no active network and feeds synthetic PCM to the real on-device
+recognizer via the public audio-source API. It bypasses the microphone. The
+observed transcript and proof limits are in
 [`docs/features/android.md`](../docs/features/android.md).

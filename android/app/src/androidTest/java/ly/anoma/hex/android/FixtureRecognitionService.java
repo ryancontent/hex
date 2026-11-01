@@ -13,21 +13,25 @@ import java.util.List;
 /** Test APK only. Exercises real system binding and IME delivery without pretending to recognize audio. */
 public final class FixtureRecognitionService extends RecognitionService {
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private Callback pending;
     @Override protected void onStartListening(Intent request, Callback callback) {
+        pending = callback;
         try { callback.readyForSpeech(new Bundle()); }
         catch (RemoteException disconnected) { return; }
+    }
+    @Override protected void onStopListening(Callback callback) {
         handler.postDelayed(() -> {
+            if (pending != callback) return;
             try {
                 Bundle partial = new Bundle();
                 partial.putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION,
-                        new ArrayList<>(List.of("Hex keyboard works.")));
+                        new ArrayList<>(List.of("lovely")));
                 partial.putBoolean("final_result", true);
                 callback.partialResults(partial);
                 callback.results(new Bundle());
             } catch (RemoteException disconnected) { /* The editor may have gone away. */ }
-        }, 750);
+        }, 250);
     }
-    @Override protected void onStopListening(Callback callback) { }
-    @Override protected void onCancel(Callback callback) { handler.removeCallbacksAndMessages(null); }
+    @Override protected void onCancel(Callback callback) { pending = null; handler.removeCallbacksAndMessages(null); }
     @Override public void onDestroy() { handler.removeCallbacksAndMessages(null); super.onDestroy(); }
 }

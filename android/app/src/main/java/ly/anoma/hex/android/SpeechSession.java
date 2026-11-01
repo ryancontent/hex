@@ -38,6 +38,7 @@ final class SpeechSession {
     }
 
     boolean active() { return recognizer != null; }
+    boolean finishing() { return stopping && active(); }
 
     static Intent request(String language) {
         return new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
