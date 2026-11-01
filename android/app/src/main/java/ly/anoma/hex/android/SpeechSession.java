@@ -18,6 +18,7 @@ import java.util.ArrayList;
 final class SpeechSession {
     interface Listener {
         default void ready() { }
+        default void level(float rms) { }
         void status(String text);
         void partial(String text);
         void result(String text, long finishMillis);
@@ -86,7 +87,9 @@ final class SpeechSession {
                     }
                 }
                 @Override public void onBeginningOfSpeech() { }
-                @Override public void onRmsChanged(float rmsdB) { }
+                @Override public void onRmsChanged(float rmsdB) {
+                    if (current() && !stopping && !completed) listener.level(rmsdB);
+                }
                 @Override public void onBufferReceived(byte[] buffer) { }
                 @Override public void onEndOfSpeech() {
                     if (current()) {

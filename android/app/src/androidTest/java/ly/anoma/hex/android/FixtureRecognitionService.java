@@ -18,6 +18,13 @@ public class FixtureRecognitionService extends RecognitionService {
         pending = callback;
         try { callback.readyForSpeech(new Bundle()); }
         catch (RemoteException disconnected) { return; }
+        handler.post(new Runnable() {
+            @Override public void run() {
+                if (pending != callback) return;
+                try { callback.rmsChanged(7f); } catch (RemoteException disconnected) { return; }
+                handler.postDelayed(this, 100);
+            }
+        });
         // Reproduce Google's end-of-speech-before-user-stop sequence. Completion
         // still requires stopListening; treating this as a stop loses the job.
         handler.postDelayed(() -> {

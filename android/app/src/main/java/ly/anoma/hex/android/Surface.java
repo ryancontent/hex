@@ -9,10 +9,10 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 final class Surface {
-    static final int BACKGROUND = Color.rgb(17, 21, 26);
-    static final int INK = Color.rgb(233, 241, 246);
+    static final int BACKGROUND = Color.rgb(17, 17, 20);
+    static final int INK = Color.rgb(242, 242, 239);
     static final int MUTED = Color.rgb(161, 177, 190);
-    static final int ACCENT = Color.rgb(142, 225, 199);
+    static final int ACCENT = Color.rgb(179, 199, 230);
     static int dp(Context context, int value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
     }

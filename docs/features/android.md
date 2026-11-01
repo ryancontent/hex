@@ -13,14 +13,14 @@ Open Hex POC                             // android.setup
 │   └── Prepare offline language -> explicit Android-managed download if needed
 └── Enable floating dictation -> explanation -> Android Accessibility settings
     └── Use Hex floating dictation: on; Hex floating dictation shortcut: off
-        └── Android's extra shortcut H toggles the service; Hex's own H records
+        └── Android's extra shortcut H toggles the service; Hex's own nested-hexagon button records
 
 Focus a supported text field with keyboard open  // android.dictation
-├── H bubble -> first placed above keyboard; user can drag it freely
-│   ├── Tap H once -> record; next tap -> finish (no intermediate control)
+├── Hex bubble -> first placed above keyboard; user can drag it freely
+│   ├── Tap Hex once -> record; next tap -> finish (no intermediate control)
 │   ├── Hold still >= 350 ms -> record; release -> finish
 │   └── Drag -> reposition; cancel any current capture/processing without insertion
-├── One fixed-size button: H -> red stop symbol -> processing ellipsis
+├── One fixed-size button: Hex mark -> warm listening dots -> blue processing flow
 │   └── Same bounds across phases, except deliberate dragging; no second control
 ├── On-device recognizer -> confirmed final text (no floating transcript preview)
 │   └── Same field, text and selection -> splice at cursor / replace selection
@@ -58,7 +58,7 @@ calls `stopListening` after that callback. A terminal result arriving early is
 held until the user stops; it is not inserted mid-hold. A hint-only empty editor
 has a uniquely known cursor at zero even if Accessibility reports `-1`.
 The single floating button is 60 dp in every phase. Successful insertion briefly
-shows a checkmark in that button; failures use an amber exclamation there and a
+shows a checkmark in that button; failures use a coral exclamation there and a
 short system toast. Phase/error text remains an Accessibility state description,
 not another floating view. A normal tap starts on release. A stationary hold
 starts after 350 ms, with a haptic when the recognizer is ready. Crossing Android's
@@ -204,3 +204,36 @@ pending taps, stationary holds, drag cancellation, and interrupted touches.
 The user's successful dictation report is separate from the automated proof:
 these runs do not independently verify the updated gesture timing, haptic,
 placement comfort, or removal of the system shortcut on their physical Pixel.
+
+## Version 0.6 desktop branding
+
+The Android floating control adapts the desktop nested Hex mark and Dot scope
+([desktop palette](../../src/rune_hud/dot_scope/scope.rs),
+[desktop glyph proportions](../../src/rune_ui/hero.wgsl)) to a single fixed-size
+Canvas button ([HexBubble](../../android/app/src/main/java/ly/anoma/hex/android/HexBubble.java)).
+Idle shows the mark on a dark plate; listening shows warm pearl braided dots;
+processing uses blue flowing dots; errors use coral. The app icon and setup
+palette use the same branding. Existing tap, hold, free drag and visibility rules
+remain in effect. This is an Android adaptation, not the desktop GPU renderer.
+
+SpeechSession forwards current recording RMS callbacks to the button. A smoothed
+envelope decays after 250 ms without a fresh callback. With no input the trace
+stays flat; its motion is not evidence of microphone audio. Android's disabled
+animation setting uses a static scope. Drawing requests stop when idle or
+detached; no second overlay or recording view is created.
+
+T3's agent-device UI automation was observed suppressing the Accessibility
+service: Android listed Hex enabled but unbound with Ui Automation active;
+closing our agent-device session restored the bound service. For manual Device
+panel tests, leave that automation session closed. T3 currently launches the
+emulator with `-no-audio`, so live host microphone testing is unavailable there.
+
+Version 0.6 verification on November 1, 2026: assembly, 27 JVM tests and lint
+passed (no lint errors). The emulator DeviceSmokeTest suite passed 13 checks;
+the optional real-model and virtual-microphone checks were skipped in this run.
+The single-control check now compares two recording frames with test-only RMS
+callbacks and confirms the scope animates within unchanged bounds. The fixture
+RMS is synthetic and is not live microphone proof. Idle, listening and processing
+screenshots were visually reviewed. Test setup now requests a fresh Accessibility
+binding after instrumentation restarts an already-enabled app. No desktop Rune
+drawing changed, so desktop golden images are unaffected.

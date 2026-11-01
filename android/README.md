@@ -3,8 +3,8 @@
 An independent native Android experiment for a Pixel 8 Pro (Android 12+).
 Keep Gboard or your preferred keyboard. Hex shows a floating button only when a
 supported text field has input focus **and its keyboard is open**, using an
-explicitly enabled Accessibility service. Version `0.5.0-poc` makes the H bubble
-the direct recorder and lets you drag it freely across the screen. Its saved
+explicitly enabled Accessibility service. Version `0.6.0-poc` brings the desktop Hex mark and Dot scope to the direct
+recorder, which you can drag freely across the screen. Its saved
 position is not snapped to an edge. The APK does not register an input method.
 
 ## Try it
@@ -20,25 +20,25 @@ Install the debug APK, open **Hex POC**, then:
    Under Android Accessibility settings, leave **Use Hex floating dictation**
    **on** and turn **Hex floating dictation shortcut** **off**. The shortcut is
    Android's extra H launcher: tapping it toggles the service, so it can create
-   the unwanted H → record-button flow. Hex's own H is the recorder. The app
+   the unwanted H → record-button flow. Hex's own nested-hexagon button is the recorder. The app
    cannot change that system shortcut selection for you.
    A sideloaded APK can encounter Android's restricted-settings protection:
    if blocked, open Hex POC's App info, use the menu's **Allow restricted
    settings** option if offered, then return to Accessibility settings.
-4. Open a text field in another app and show its keyboard. Hex's green **H**
+4. Open a text field in another app and show its keyboard. Hex's dark **nested-hexagon button**
    appears above the keyboard on first use. **Drag it anywhere in the usable
    screen**, including over the keyboard if you prefer. Its position is remembered
    when hidden, when the service restarts, and across launches. There is no side
    docking. **Reset bubble position** in Hex restores the initial location.
-   Dismiss the keyboard or leave the field and the H disappears entirely.
-5. **Tap H once** to start and **tap again** to finish. Or **hold still** until
-   it turns red (350 ms), speak, and **release** to finish. A short vibration
+   Dismiss the keyboard or leave the field and the button disappears entirely.
+5. **Tap Hex once** to start and **tap again** to finish. Or **hold still** until
+   its warm dot scope appears (350 ms), speak, and **release** to finish. A short vibration
    when the microphone is ready respects Android's haptic settings.
    Movement before the hold threshold is a drag, with no recording. Moving after
    a hold starts, or dragging a locked recording/processing attempt, cancels that
    attempt without insertion and moves the bubble instead.
-   The same button changes from H to a red stop symbol while recording,
-   then an ellipsis while processing. It never expands or adds another floating
+   The same button changes from the Hex mark to warm braided dots while listening,
+   then blue flowing dots while processing. It never expands or adds another floating
    control. A brief checkmark confirms insertion; an amber exclamation and a
    system toast explain a failure.
 6. Final words are inserted at the cursor, replacing only selected text. If you
@@ -81,7 +81,7 @@ The recording only finishes on your stop tap or held release. Android's
 end-of-speech notification no longer disables that stop gesture. If the speech
 service returns a final result early, Hex holds it until you finish instead of
 inserting while your finger is still down. Ordinary partials are never treated
-as final text. Once you stop, the button shows an ellipsis while waiting for the
+as final text. Once you stop, the button shows blue flowing dots while waiting for the
 final result. Recording and processing use the same button's color/symbol, with
 no separate status panel or transcript preview. Accessibility state descriptions
 retain the phase/error information for screen readers.
@@ -154,3 +154,8 @@ on-device recognition component and returns its unmodified callbacks. Both
 tap/stop and hold/release must insert the recognized phrase while preserving
 surrounding text. This joins recognition and insertion proof but still bypasses
 the physical microphone; no canned transcript is supplied by that test service.
+
+The single 60 dp control uses the desktop dark plate, nested Hex mark, warm pearl
+listening dots and blue processing flow. Speech-service RMS callbacks shape the
+braided trace; silent or stale input settles to a flat line. Android disabled
+animations keep a static scope. Frames stop when the overlay is detached or idle.

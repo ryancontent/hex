@@ -174,6 +174,16 @@ public class DeviceSmokeTest {
         assertEquals("■", recording.getText());
         assertOneFloatingControl();
         saveButtonProof("recording");
+        android.graphics.Bitmap firstFrame = automation().takeScreenshot();
+        Thread.sleep(180);
+        android.graphics.Bitmap nextFrame = automation().takeScreenshot();
+        android.graphics.Bitmap firstScope = android.graphics.Bitmap.createBitmap(firstFrame,
+                bounds.left, bounds.top, bounds.width(), bounds.height());
+        android.graphics.Bitmap nextScope = android.graphics.Bitmap.createBitmap(nextFrame,
+                bounds.left, bounds.top, bounds.width(), bounds.height());
+        assertFalse("The listening scope must animate inside the same button", firstScope.sameAs(nextScope));
+        firstScope.recycle(); nextScope.recycle(); firstFrame.recycle(); nextFrame.recycle();
+        saveButtonProof("recording-next");
         recording.click();
         assertTrue(device.wait(Until.hasObject(By.desc("Hex is transcribing")), 5_000));
         var processing = device.findObject(By.desc("Hex is transcribing"));
@@ -347,6 +357,13 @@ public class DeviceSmokeTest {
         preferences.setEnabled(true);
         String existing = previousServices.equals("null") || previousServices.isEmpty() ? "" : previousServices + ":";
         assertTrue(existing.matches("[A-Za-z0-9_.$/:]*"));
+        // Instrumentation restarts the target process. If Hex was already enabled
+        // manually, Android can retain its disconnected service as crashed; give
+        // this test a fresh bind and restore the user's list during cleanup.
+        String withoutHex = String.join(":", Arrays.stream(previousServices.split(":"))
+                .filter(value -> !value.equals(SERVICE) && !value.equals("null")).toList());
+        if (withoutHex.isEmpty()) shell("settings delete secure enabled_accessibility_services");
+        else shell("settings put secure enabled_accessibility_services " + withoutHex);
         // UiAutomation executes argv directly, without a shell; quotes become literal
         // component-name characters. The validated value contains no whitespace.
         shell("settings put secure enabled_accessibility_services " + existing + SERVICE);

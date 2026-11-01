@@ -36,6 +36,10 @@ public final class SetupActivity extends Activity {
         preferences = new Preferences(this);
         LinearLayout root = Surface.column(this);
         // Target 35 draws edge-to-edge: keep every control clear of system bars and the IME.
+        android.widget.ImageView logo = new android.widget.ImageView(this);
+        logo.setImageResource(R.drawable.hex_icon);
+        logo.setImportantForAccessibility(android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        root.addView(logo, new LinearLayout.LayoutParams(Surface.dp(this, 64), Surface.dp(this, 64)));
         root.addView(Surface.text(this, "Hex for Android", 30, true));
         root.addView(Surface.text(this, "Pixel proof of concept", 17, false));
         root.addView(Surface.text(this,
@@ -128,11 +132,11 @@ public final class SetupActivity extends Activity {
                 "Enable Hex floating dictation in Accessibility settings. Your keyboard stays selected. "
                 + "Leave Use Hex floating dictation on and turn Hex floating dictation shortcut off. "
                 + "The shortcut is Android’s extra H launcher, not the recorder. "
-                + "Focus a text field: tap Hex’s H bubble to record and tap again to finish, "
-                + "or hold still until it turns red, speak, and release to finish. "
-                + "Drag the H anywhere on screen to move it; its position is remembered. "
+                + "Focus a text field: tap Hex’s bubble to record and tap again to finish, "
+                + "or hold still until the dot scope appears, speak, and release to finish. "
+                + "Drag the Hex button anywhere on screen to move it; its position is remembered. "
                 + "Dragging cancels a recording or processing attempt without inserting text. "
-                + "The same button turns red while recording and shows an ellipsis while processing.", 15, false));
+                + "The same button shows warm pearl dots while listening and flowing blue dots while processing.", 15, false));
         root.addView(Surface.text(this,
                 "Accessibility lets Hex find the selected field and insert at its cursor. "
                 + "When you start recording, Hex reads that field’s text and selection to preserve existing words. "

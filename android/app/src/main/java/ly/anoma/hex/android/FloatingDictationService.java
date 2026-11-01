@@ -15,9 +15,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.graphics.PixelFormat;
-import android.graphics.Color;
 import android.graphics.Rect;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -45,9 +43,7 @@ public final class FloatingDictationService extends AccessibilityService {
     private SpeechSession speech;
     private Button bubble;
     private String status = "Ready to dictate";
-    private Button microphone;
-    private GradientDrawable buttonBackground;
-    private int buttonColor;
+    private HexBubble microphone;
     private WindowManager manager;
     private WindowManager.LayoutParams placement;
     private AccessibilityNodeInfo target;
@@ -92,6 +88,7 @@ public final class FloatingDictationService extends AccessibilityService {
                 "dictation", "Dictation microphone", NotificationManager.IMPORTANCE_LOW));
         createBubble();
         speech = new SpeechSession(this, new SpeechSession.Listener() {
+            @Override public void level(float rms) { microphone.level(rms); }
             @Override public void ready() {
                 if (gesture.isHolding()) microphone.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             }
@@ -317,17 +314,12 @@ public final class FloatingDictationService extends AccessibilityService {
     }
 
     private void createBubble() {
-        microphone = new Button(this);
+        microphone = new HexBubble(this);
         bubble = microphone; // The overlay contains exactly this one control.
         microphone.setAllCaps(false);
         microphone.setGravity(Gravity.CENTER);
         microphone.setPadding(0, 0, 0, 0);
-        microphone.setTextColor(Surface.BACKGROUND);
         microphone.setElevation(Surface.dp(this, 8));
-        buttonBackground = new GradientDrawable();
-        buttonBackground.setShape(GradientDrawable.OVAL);
-        buttonBackground.setStroke(Surface.dp(this, 2), Surface.BACKGROUND);
-        microphone.setBackground(buttonBackground);
         microphone.setOnClickListener(view -> {
             if (!pointerClick && speech != null && !speech.finishing()) {
                 if (speech.active()) speech.stop(); else startRecording();
@@ -377,9 +369,7 @@ public final class FloatingDictationService extends AccessibilityService {
         String description = finishing ? "Hex is transcribing" : active ? "Stop Hex dictation" : "Start Hex dictation";
         if (!description.contentEquals(microphone.getContentDescription() == null ? "" : microphone.getContentDescription()))
             microphone.setContentDescription(description);
-        int color = finishing ? Surface.MUTED : active ? Color.rgb(255, 145, 145)
-                : feedback && errorFeedback ? Color.rgb(244, 200, 136) : Surface.ACCENT;
-        if (buttonColor != color) { buttonBackground.setColor(color); buttonColor = color; }
+        microphone.phase(active && !finishing, finishing, feedback, errorFeedback);
         String state = active || feedback ? status : "Ready to dictate";
         if (!state.contentEquals(microphone.getStateDescription() == null ? "" : microphone.getStateDescription()))
             microphone.setStateDescription(state);
