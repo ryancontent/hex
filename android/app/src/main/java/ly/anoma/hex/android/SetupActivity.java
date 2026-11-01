@@ -36,13 +36,6 @@ public final class SetupActivity extends Activity {
         preferences = new Preferences(this);
         LinearLayout root = Surface.column(this);
         // Target 35 draws edge-to-edge: keep every control clear of system bars and the IME.
-        root.setOnApplyWindowInsetsListener((view, insets) -> {
-            android.graphics.Insets bars = insets.getInsets(
-                    android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.ime());
-            int pad = Surface.dp(this, 20);
-            view.setPadding(pad + bars.left, pad + bars.top, pad + bars.right, pad + bars.bottom);
-            return insets;
-        });
         root.addView(Surface.text(this, "Hex for Android", 30, true));
         root.addView(Surface.text(this, "Pixel proof of concept", 17, false));
         root.addView(Surface.text(this,
@@ -152,6 +145,23 @@ public final class SetupActivity extends Activity {
         scroll.setFillViewport(true);
         scroll.setBackgroundColor(Surface.BACKGROUND);
         scroll.addView(root);
+        // Insets belong to the viewport, not the scrolling content. Padding the
+        // content itself left the practice editor behind the IME after focus.
+        scroll.setOnApplyWindowInsetsListener((view, insets) -> {
+            android.graphics.Insets bars = insets.getInsets(
+                    android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.ime());
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            scroll.post(() -> {
+                android.view.View focused = getCurrentFocus();
+                if (focused != null && focused != scroll) {
+                    android.graphics.Rect rectangle = new android.graphics.Rect();
+                    focused.getDrawingRect(rectangle);
+                    scroll.offsetDescendantRectToMyCoords(focused, rectangle);
+                    scroll.scrollTo(0, Math.max(0, rectangle.top - scroll.getPaddingTop()));
+                }
+            });
+            return insets;
+        });
         setContentView(scroll);
     }
 

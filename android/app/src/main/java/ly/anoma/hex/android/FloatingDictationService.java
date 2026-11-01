@@ -103,7 +103,7 @@ public final class FloatingDictationService extends AccessibilityService {
     }
 
     private AccessibilityNodeInfo focusedEditor() {
-        if (getSystemService(KeyguardManager.class).isKeyguardLocked()) return null;
+        if (getSystemService(KeyguardManager.class).isKeyguardLocked() || !keyboardVisible()) return null;
         for (AccessibilityWindowInfo window : getWindows()) {
             if (window.getType() != AccessibilityWindowInfo.TYPE_APPLICATION
                     || (!window.isActive() && !window.isFocused())) continue;
@@ -111,7 +111,7 @@ public final class FloatingDictationService extends AccessibilityService {
             if (root == null) continue;
             AccessibilityNodeInfo node = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
             root.recycle();
-            if (node != null && supported(node)) return node;
+            if (node != null && node.refresh() && supported(node)) return node;
             if (node != null) node.recycle();
         }
         return null;
@@ -120,14 +120,31 @@ public final class FloatingDictationService extends AccessibilityService {
     private boolean supported(AccessibilityNodeInfo node) {
         return node.isEditable() && node.isFocused() && node.isEnabled() && node.isVisibleToUser()
                 && !node.isPassword()
+                && selectionStart(node) >= 0 && selectionEnd(node) >= 0
                 && node.getActionList().contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT);
+    }
+
+    private boolean keyboardVisible() {
+        for (AccessibilityWindowInfo window : getWindows()) {
+            if (window.getType() != AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue;
+            Rect bounds = new Rect();
+            window.getBoundsInScreen(bounds);
+            if (!bounds.isEmpty()) return true;
+        }
+        return false;
     }
 
     private void refreshTarget() {
         if (!connected || speech == null) return;
         AccessibilityNodeInfo next = new Preferences(this).enabled() ? focusedEditor() : null;
         if (speech.active() && (next == null || recordingTarget == null || !recordingTarget.equals(next)
-                || !unchanged(next))) cancelRecording();
+                || !unchanged(next))) {
+            cancelRecording();
+            if (next != null) {
+                status.setText("Field or cursor changed. Dictation cancelled.");
+                renderMessage();
+            }
+        }
         if (target != null) target.recycle();
         target = next;
         if (target == null) hide(); else show();
@@ -135,7 +152,17 @@ public final class FloatingDictationService extends AccessibilityService {
 
     private boolean unchanged(AccessibilityNodeInfo node) {
         return original != null && original.contentEquals(text(node))
-                && node.getTextSelectionStart() == selectionStart && node.getTextSelectionEnd() == selectionEnd;
+                && selectionStart(node) == selectionStart && selectionEnd(node) == selectionEnd;
+    }
+
+    private static boolean empty(AccessibilityNodeInfo node) {
+        return node.isShowingHintText() || node.getText() == null || node.getText().length() == 0;
+    }
+    private static int selectionStart(AccessibilityNodeInfo node) {
+        return FieldInsertion.selection(empty(node), node.getTextSelectionStart());
+    }
+    private static int selectionEnd(AccessibilityNodeInfo node) {
+        return FieldInsertion.selection(empty(node), node.getTextSelectionEnd());
     }
 
     private static String text(AccessibilityNodeInfo node) {
@@ -152,8 +179,8 @@ public final class FloatingDictationService extends AccessibilityService {
             return;
         }
         original = text(target);
-        selectionStart = target.getTextSelectionStart();
-        selectionEnd = target.getTextSelectionEnd();
+        selectionStart = selectionStart(target);
+        selectionEnd = selectionEnd(target);
         if (FieldInsertion.prepare(original, selectionStart, selectionEnd, "test") == null) {
             original = null;
             status.setText("This field doesn’t expose its cursor. Try another field.");
@@ -183,9 +210,13 @@ public final class FloatingDictationService extends AccessibilityService {
     private void insert(String words) {
         AccessibilityNodeInfo current = focusedEditor();
         try {
-            if (!generation.consume(token) || !new Preferences(this).enabled() || current == null
-                    || !current.refresh() || !supported(current) || recordingTarget == null
-                    || !recordingTarget.equals(current) || !unchanged(current)) return;
+            if (!generation.consume(token) || !new Preferences(this).enabled()) return;
+            if (current == null || !current.refresh() || !supported(current) || recordingTarget == null
+                    || !recordingTarget.equals(current) || !unchanged(current)) {
+                status.setText("Field or cursor changed. Nothing inserted.");
+                renderMessage();
+                return;
+            }
             FieldInsertion.Result result = FieldInsertion.prepare(original, selectionStart, selectionEnd, words);
             if (result == null) return;
             Bundle args = new Bundle();
@@ -236,6 +267,7 @@ public final class FloatingDictationService extends AccessibilityService {
         bubble.setBackground(background);
         bubble.setElevation(Surface.dp(this, 8));
         status = Surface.text(this, "", 14, false);
+        status.setContentDescription("Hex dictation status");
         status.setMaxLines(3);
         bubble.addView(status);
         LinearLayout row = new LinearLayout(this);
@@ -277,9 +309,10 @@ public final class FloatingDictationService extends AccessibilityService {
 
     private void render() {
         boolean active = speech != null && speech.active();
-        String label = active ? "■" : "●";
+        boolean finishing = active && speech.finishing();
+        String label = finishing ? "…" : active ? "■" : "●";
         if (!label.contentEquals(microphone.getText())) microphone.setText(label);
-        String description = active ? "Stop Hex dictation" : "Start Hex dictation";
+        String description = finishing ? "Hex is transcribing" : active ? "Stop Hex dictation" : "Start Hex dictation";
         if (!description.contentEquals(microphone.getContentDescription() == null ? "" : microphone.getContentDescription()))
             microphone.setContentDescription(description);
         cancelButton.setVisibility(active ? View.VISIBLE : View.GONE);

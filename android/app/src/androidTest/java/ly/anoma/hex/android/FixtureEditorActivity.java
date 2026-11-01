@@ -25,6 +25,7 @@ public final class FixtureEditorActivity extends Activity {
         password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         Button leave = new Button(this);
         leave.setText("Leave text fields");
+        leave.setContentDescription("Leave text fields");
         leave.setFocusableInTouchMode(true);
         leave.setOnClickListener(view -> leave.requestFocus());
         root.addView(leave);

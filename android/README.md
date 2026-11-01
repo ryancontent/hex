@@ -1,10 +1,11 @@
 # Hex for Android — floating dictation proof of concept
 
 An independent native Android experiment for a Pixel 8 Pro (Android 12+).
-Keep Gboard or your preferred keyboard. Hex shows a floating button when a
-supported text field has input focus, using an explicitly enabled Accessibility
-service. Version `0.2.0-poc` replaces the earlier keyboard-based experiment;
-the APK no longer registers an input method.
+Keep Gboard or your preferred keyboard. Hex shows a floating button only when a
+supported text field has input focus **and its keyboard is open**, using an
+explicitly enabled Accessibility service. Version `0.3.0-poc` fixes
+stop-after-end-of-speech handling, hint-only fields, and hidden-keyboard
+visibility. The APK does not register an input method.
 
 ## Try it
 
@@ -20,13 +21,14 @@ Install the debug APK, open **Hex POC**, then:
    A sideloaded APK can encounter Android's restricted-settings protection:
    if blocked, open Hex POC's App info, use the menu's **Allow restricted
    settings** option if offered, then return to Accessibility settings.
-4. Open a text field in another app. A small green Hex button appears above
-   the keyboard near the right edge. The keyboard itself stays unchanged.
+4. Open a text field in another app and show its keyboard. A small green Hex
+   button appears above the keyboard near the right edge. Dismiss the keyboard
+   or leave the field and the button disappears entirely. Your keyboard stays unchanged.
 5. **Tap** the button to start and **tap again** to finish. Or **hold** it while
    speaking and **release** to finish (350 ms distinguishes a hold from a tap).
    Slide off before releasing, or tap **×**, to cancel.
 6. Final words are inserted at the cursor, replacing only selected text. If you
-   change fields, edit text, move the cursor, or lock the screen during capture,
+   change fields, close the keyboard, edit text, move the cursor, or lock the screen during capture,
    Hex cancels rather than applying the result elsewhere. Password fields hide
    the button. Disable Labs to hide it everywhere, or disable the Accessibility
    service to disconnect Hex from other apps.
@@ -42,13 +44,15 @@ the offline language has been installed.
 Accessibility is needed to detect the focused editable field, draw a
 `TYPE_ACCESSIBILITY_OVERLAY`, and use `ACTION_SET_TEXT` to insert words while
 preserving the surrounding text. No clipboard or keyboard switching is used.
-The service reads the focused field's text and selection **after you start a
-recording**, retains them only until that job finishes/cancels, and checks them
+The service examines the focused field's emptiness and cursor to determine
+eligibility. **After you start recording**, it snapshots that field's text and
+selection, retains them only until that job finishes/cancels, and checks them
 again immediately before insertion. It does not log or send them. A microphone
 foreground-service notification is used only while dictation is active.
 
 Only visible, enabled, non-password editable fields exposing `ACTION_SET_TEXT`
-and a valid selection are supported. Some custom editors/WebViews do not expose
+and a valid selection are supported. An empty/hint-only field has one possible
+insertion position (zero), even when Android reports no cursor. Some custom editors/WebViews do not expose
 these APIs, so the bubble can be absent or insertion can be refused. Accessibility
 text replacement is not an atomic editor transaction: the fresh focus/text/
 selection check reduces stale insertion risk, but an app edit racing the final
@@ -58,6 +62,13 @@ full accessible text; no universal rich-text preservation is claimed.
 No Parakeet, desktop sync, always-listening microphone, or Play Store release.
 Physical Pixel microphone behavior, latency, battery use, Bluetooth routing,
 and compatibility with the user's apps remain to be checked.
+
+The recording only finishes on your stop tap or held release. Android's
+end-of-speech notification no longer disables that stop gesture. If the speech
+service returns a final result early, Hex holds it until you finish instead of
+inserting while your finger is still down. Ordinary partials are never treated
+as final text. Once you stop, the button shows an ellipsis while waiting for the
+final result; recognition/insertion failures show a short status message.
 
 ## Build and install
 
@@ -112,3 +123,18 @@ It asserts no active network and feeds synthetic PCM to the real on-device
 recognizer via the public audio-source API. It bypasses the microphone. The
 observed transcript and proof limits are in
 [`docs/features/android.md`](../docs/features/android.md).
+
+To exercise actual offline model results through the production `SpeechSession`
+and overlay insertion together, use the prepared emulator with networking off:
+
+```sh
+./gradlew :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=ly.anoma.hex.android.DeviceSmokeTest#realOnDevicePcmIsInsertedThroughProductionSessionOnStop \
+  -Pandroid.testInstrumentationRunnerArguments.pipelineProof=true
+```
+
+A test-only audio-source service forwards the fixture to the platform's actual
+on-device recognition component and returns its unmodified callbacks. Both
+tap/stop and hold/release must insert the recognized phrase while preserving
+surrounding text. This joins recognition and insertion proof but still bypasses
+the physical microphone; no canned transcript is supplied by that test service.

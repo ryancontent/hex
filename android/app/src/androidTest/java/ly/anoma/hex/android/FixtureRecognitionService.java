@@ -10,7 +10,7 @@ import android.speech.SpeechRecognizer;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Test APK only. Exercises real system binding and IME delivery without pretending to recognize audio. */
+/** Test APK only. Exercises system binding and overlay delivery without pretending to recognize audio. */
 public final class FixtureRecognitionService extends RecognitionService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Callback pending;
@@ -18,6 +18,12 @@ public final class FixtureRecognitionService extends RecognitionService {
         pending = callback;
         try { callback.readyForSpeech(new Bundle()); }
         catch (RemoteException disconnected) { return; }
+        // Reproduce Google's end-of-speech-before-user-stop sequence. Completion
+        // still requires stopListening; treating this as a stop loses the job.
+        handler.postDelayed(() -> {
+            if (pending != callback) return;
+            try { callback.endOfSpeech(); } catch (RemoteException disconnected) { }
+        }, 80);
     }
     @Override protected void onStopListening(Callback callback) {
         handler.postDelayed(() -> {

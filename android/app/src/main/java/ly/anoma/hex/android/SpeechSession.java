@@ -30,6 +30,8 @@ final class SpeechSession {
     private long generation;
     private long stoppedAt;
     private boolean stopping;
+    private boolean completed;
+    private String completedText;
     private Runnable timeout;
 
     SpeechSession(Context context, Listener listener) {
@@ -69,6 +71,8 @@ final class SpeechSession {
         long token = ++generation;
         stoppedAt = 0;
         stopping = false;
+        completed = false;
+        completedText = "";
         FinalTranscript transcript = new FinalTranscript();
         try {
             recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context);
@@ -82,29 +86,30 @@ final class SpeechSession {
                 @Override public void onBufferReceived(byte[] buffer) { }
                 @Override public void onEndOfSpeech() {
                     if (current()) {
-                        if (stoppedAt == 0) stoppedAt = SystemClock.elapsedRealtime();
-                        stopping = true;
-                        listener.status("Transcribing on-device…");
-                        armTimeout(token, 15_000);
+                        // The endpointer is not the user's stop gesture. Google's
+                        // service can wait for stopListening after this callback.
+                        // Marking stopping here made both the second tap and a
+                        // held release no-ops, stranding the transcript.
+                        listener.status(stopping ? "Transcribing on-device…" : "Tap Stop or release to insert.");
                     }
                 }
                 @Override public void onError(int error) {
-                    if (!current()) return;
+                    if (!current() || completed) return;
                     release();
                     listener.status(errorText(error));
                     listener.finished();
                 }
                 @Override public void onResults(Bundle results) {
-                    if (!current()) return;
-                    String text = transcript.complete(first(results));
-                    long elapsed = stoppedAt == 0 ? -1 : SystemClock.elapsedRealtime() - stoppedAt;
-                    release();
-                    if (text.isBlank()) listener.status("No words heard. Try again.");
-                    else listener.result(text, elapsed);
-                    listener.finished();
+                    if (!current() || completed) return;
+                    completedText = transcript.complete(first(results));
+                    completed = true;
+                    // Some services finish automatically. Keep that final result
+                    // until the user taps Stop/releases; never insert mid-hold.
+                    if (stopping) deliver();
+                    else listener.status("Speech ready. Tap Stop or release to insert.");
                 }
                 @Override public void onPartialResults(Bundle results) {
-                    if (current()) listener.partial(transcript.partial(first(results),
+                    if (current() && !completed) listener.partial(transcript.partial(first(results),
                             results.getBoolean(FinalTranscript.GOOGLE_FINAL_RESULT, false)));
                 }
                 @Override public void onEvent(int eventType, Bundle params) { }
@@ -124,6 +129,7 @@ final class SpeechSession {
         stopping = true;
         stoppedAt = SystemClock.elapsedRealtime();
         listener.status("Transcribing on-device…");
+        if (completed) { deliver(); return; }
         armTimeout(generation, 15_000);
         try { recognizer.stopListening(); }
         catch (RuntimeException failure) {
@@ -135,6 +141,15 @@ final class SpeechSession {
 
     void cancel() {
         release();
+        listener.finished();
+    }
+
+    private void deliver() {
+        String text = completedText;
+        long elapsed = stoppedAt == 0 ? -1 : SystemClock.elapsedRealtime() - stoppedAt;
+        release();
+        if (text.isBlank()) listener.status("No words heard. Try again.");
+        else listener.result(text, elapsed);
         listener.finished();
     }
 
@@ -154,6 +169,8 @@ final class SpeechSession {
         if (timeout != null) handler.removeCallbacks(timeout);
         SpeechRecognizer previous = recognizer;
         recognizer = null;
+        completedText = "";
+        completed = false;
         if (previous != null) {
             try { previous.cancel(); } catch (RuntimeException ignored) { }
             try { previous.destroy(); } catch (RuntimeException ignored) { }

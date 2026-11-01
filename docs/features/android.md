@@ -14,15 +14,15 @@ Open Hex POC                             // android.setup
 └── Enable floating dictation -> explanation -> Android Accessibility settings
     └── Enable Hex floating dictation; leave Gboard / current keyboard selected
 
-Focus a supported text field             // android.dictation
+Focus a supported text field with keyboard open  // android.dictation
 ├── Small floating button -> above the keyboard, near the right edge
 │   ├── Tap -> record; next tap -> finish
 │   ├── Hold >= 350 ms -> record; release -> finish
 │   └── Slide off / × -> cancel
 ├── On-device recognizer -> partial preview -> confirmed final text
 │   └── Same field, text and selection -> splice at cursor / replace selection
-├── Changed field/text/selection, lock screen, interrupted service -> cancel
-├── Password / unsupported editor / no focused editable field -> hide
+├── Changed field/text/selection, closed keyboard, lock screen, interrupted service -> cancel
+├── Keyboard closed / password / unsupported editor / no focused editable field -> hide
 └── Labs off -> cancel and hide; Accessibility off -> disconnect service
 ```
 
@@ -35,8 +35,8 @@ Sources: [`FloatingDictationService`](../../android/app/src/main/java/ly/anoma/h
 and the [`manifest`](../../android/app/src/main/AndroidManifest.xml).
 
 The service does not alter the default input method or use the clipboard. It
-detects a focused editable node, but reads its text/selection only after the
-user starts a job. It stores that snapshot only until completion/cancellation,
+examines only the focused editor's eligibility, emptiness and selection. It
+snapshots the full field text after the user starts a job and retains it only until completion/cancellation,
 then refreshes and validates focus, text, and selection before `ACTION_SET_TEXT`.
 The returned action and a cursor-restoration action can fail. This is not an
 atomic editor transaction; an app edit racing the final action remains a limit.
@@ -50,6 +50,10 @@ is an explicit action that may download a language; recording is scoped to the
 gesture/toggle, a 60-second deadline, and a 15-second finish deadline. No audio or
 transcript files are written. Google's `final_result: true` partials are retained
 for an empty completion; ordinary partials are never promoted to inserted text.
+End-of-speech does not mean the user requested stop. Explicit stop/release still
+calls `stopListening` after that callback. A terminal result arriving early is
+held until the user stops; it is not inserted mid-hold. A hint-only empty editor
+has a uniquely known cursor at zero even if Accessibility reports `-1`.
 
 ## Checks and observed proof
 
@@ -92,3 +96,38 @@ battery use, interruptions, gesture comfort, and insertion in the user's apps.
 Android may require **Allow restricted settings** in App info before a sideloaded
 Accessibility service can be enabled. The desktop Rune UI and its goldens do not
 cover this independent Android surface.
+
+## Version 0.3 regression verification
+
+The earlier overlay tests omitted the service's end-of-speech-before-stop
+sequence and keyboard dismissal while a field stays focused. Both added
+regressions failed against 0.2 before the fixes. The expanded tests also caught
+Hex's own practice field becoming invisible behind the IME; the form now insets
+the scroll viewport and scrolls the focused editor above the keyboard. Empty
+hint-only selection is normalized to zero rather than treating the hint as text.
+
+On November 1, 2026, the final 0.3 run passed all **17 JVM tests and 12 emulator
+instrumentation tests**, with the three model-dependent flags enabled
+(`microphoneProof`, `offlineProof`, `pipelineProof`). APK assembly and lint passed
+with no lint errors. The checks cover both gesture modes after end-of-speech,
+holding an early final until explicit stop, Hex's blank practice field, keyboard
+dismissal/reappearance, non-editor and password hiding, cancellation, Labs gates,
+and preservation of Gboard.
+
+The new real-model joined check uses
+[`AudioFixtureRecognitionService`](../../android/app/src/androidTest/java/ly/anoma/hex/android/AudioFixtureRecognitionService.java)
+only as a supplied-PCM audio source, forwarding actual platform on-device ASR
+callbacks through the production `SpeechSession` and Accessibility insertion.
+Both tap/stop and hold/release inserted **“Hello A quick brown fox jumps over the
+lazy Dog world”** from `Hello world` with its cursor after `Hello`. Networking
+was disabled and the test asserted no active network. Unlike the original
+separate checks, this establishes model-result-to-editor delivery in one flow.
+It still bypasses live microphone acquisition.
+
+A separate local SDK gRPC virtual-microphone injection experiment did **not**
+produce a final usable transcript: only the partial “The quick” appeared before
+no-match. Enabling the emulator's host-audio backend also hung its QEMU loop.
+That experiment is not passing microphone-to-field proof, and its cause was not
+established. Physical voice capture and compatibility with Messages/T3 Code on
+the user's Pixel remain unverified by these automated runs; the supplied-PCM
+check must not be presented as proof of that path.
