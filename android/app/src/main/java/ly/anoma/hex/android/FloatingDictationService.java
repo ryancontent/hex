@@ -24,8 +24,11 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -56,6 +59,17 @@ public final class FloatingDictationService extends AccessibilityService {
     private boolean attached;
     private boolean connected;
     private boolean pointerClick;
+    private boolean trackingTouch;
+    private boolean dragging;
+    private float downRawX, downRawY;
+    private int dragStartX, dragStartY;
+    private BubblePosition.Point dragPosition;
+    private AccessibilityNodeInfo pressTarget;
+    private final Runnable beginHold = () -> {
+        if (!trackingTouch || dragging) return;
+        refreshTarget();
+        if (pressMatchesTarget()) act(gesture.hold());
+    };
     private long feedbackUntil;
     private boolean errorFeedback;
     private int lastX = -1, lastY = -1, lastWidth = -1, lastHeight = -1;
@@ -78,6 +92,9 @@ public final class FloatingDictationService extends AccessibilityService {
                 "dictation", "Dictation microphone", NotificationManager.IMPORTANCE_LOW));
         createBubble();
         speech = new SpeechSession(this, new SpeechSession.Listener() {
+            @Override public void ready() {
+                if (gesture.isHolding()) microphone.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+            }
             @Override public void status(String text) {
                 status = text;
                 if (!speech.active()) renderMessage(); else render();
@@ -139,6 +156,8 @@ public final class FloatingDictationService extends AccessibilityService {
     private void refreshTarget() {
         if (!connected || speech == null) return;
         AccessibilityNodeInfo next = new Preferences(this).enabled() ? focusedEditor() : null;
+        if (trackingTouch && !dragging && pressTarget != null && (next == null || !pressTarget.equals(next)))
+            cancelRecording();
         if (speech.active() && (next == null || recordingTarget == null || !recordingTarget.equals(next)
                 || !unchanged(next))) {
             cancelRecording();
@@ -245,9 +264,47 @@ public final class FloatingDictationService extends AccessibilityService {
     }
 
     private void cancelRecording() {
+        handler.removeCallbacks(beginHold);
+        clearPressTarget();
         clearRecordingTarget();
         if (speech != null) speech.cancel();
         gesture.cancel();
+    }
+
+    private void clearPressTarget() {
+        if (pressTarget != null) pressTarget.recycle();
+        pressTarget = null;
+    }
+    private boolean pressMatchesTarget() {
+        return pressTarget != null && target != null && pressTarget.equals(target);
+    }
+    private void moveTouch(MotionEvent event) {
+        if (!trackingTouch) return;
+        float dx = event.getRawX() - downRawX;
+        float dy = event.getRawY() - downRawY;
+        if (!dragging && Math.hypot(dx, dy) > ViewConfiguration.get(this).getScaledTouchSlop()) {
+            dragging = true;
+            handler.removeCallbacks(beginHold);
+            act(gesture.drag());
+        }
+        if (dragging) {
+            dragPosition = BubblePosition.clamp(dragStartX + Math.round(dx), dragStartY + Math.round(dy),
+                    safeArea(), placement.width);
+            position();
+        }
+    }
+    private void finishTouch(boolean cancelled, MotionEvent event) {
+        handler.removeCallbacks(beginHold);
+        if (!cancelled) moveTouch(event);
+        if (dragging && dragPosition != null)
+            new Preferences(this).setBubblePosition(BubblePosition.save(dragPosition, safeArea(), placement.width));
+        if (cancelled) act(gesture.cancel());
+        else if (dragging || pressMatchesTarget()) act(gesture.up(event.getEventTime(), true));
+        else act(gesture.cancel());
+        trackingTouch = false;
+        dragging = false;
+        clearPressTarget();
+        position();
     }
 
     private void act(RecordGesture.Action action) {
@@ -279,15 +336,25 @@ public final class FloatingDictationService extends AccessibilityService {
         microphone.setTextSize(26);
         microphone.setOnTouchListener((view, event) -> {
             switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN -> act(gesture.down(event.getEventTime(), speech.active(), speech.finishing()));
+                case MotionEvent.ACTION_DOWN -> {
+                    refreshTarget();
+                    clearPressTarget();
+                    if (target != null) pressTarget = AccessibilityNodeInfo.obtain(target);
+                    trackingTouch = true;
+                    dragging = false;
+                    downRawX = event.getRawX(); downRawY = event.getRawY();
+                    dragStartX = placement.x; dragStartY = placement.y;
+                    dragPosition = new BubblePosition.Point(placement.x, placement.y);
+                    act(gesture.down(event.getEventTime(), speech.active(), speech.finishing()));
+                    handler.postDelayed(beginHold, RecordGesture.HOLD_MILLIS);
+                }
                 case MotionEvent.ACTION_UP -> {
-                    boolean inside = event.getX() >= 0 && event.getY() >= 0
-                            && event.getX() < view.getWidth() && event.getY() < view.getHeight();
-                    act(gesture.up(event.getEventTime(), inside));
+                    finishTouch(false, event);
                     pointerClick = true;
                     try { view.performClick(); } finally { pointerClick = false; }
                 }
-                case MotionEvent.ACTION_CANCEL -> act(gesture.cancel());
+                case MotionEvent.ACTION_MOVE -> moveTouch(event);
+                case MotionEvent.ACTION_CANCEL -> finishTouch(true, event);
                 default -> { }
             }
             return true;
@@ -296,7 +363,7 @@ public final class FloatingDictationService extends AccessibilityService {
                 Surface.dp(this, 60), WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
-        placement.gravity = Gravity.TOP | Gravity.RIGHT;
+        placement.gravity = Gravity.TOP | Gravity.LEFT;
         placement.setTitle("Hex floating dictation");
         render();
     }
@@ -305,7 +372,7 @@ public final class FloatingDictationService extends AccessibilityService {
         boolean active = speech != null && speech.active();
         boolean finishing = active && speech.finishing();
         boolean feedback = SystemClock.uptimeMillis() < feedbackUntil;
-        String label = finishing ? "…" : active ? "■" : feedback ? (errorFeedback ? "!" : "✓") : "●";
+        String label = finishing ? "…" : active ? "■" : feedback ? (errorFeedback ? "!" : "✓") : "H";
         if (!label.contentEquals(microphone.getText())) microphone.setText(label);
         String description = finishing ? "Hex is transcribing" : active ? "Stop Hex dictation" : "Start Hex dictation";
         if (!description.contentEquals(microphone.getContentDescription() == null ? "" : microphone.getContentDescription()))
@@ -341,12 +408,26 @@ public final class FloatingDictationService extends AccessibilityService {
         }
         bubble.measure(View.MeasureSpec.makeMeasureSpec(placement.width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(placement.height, View.MeasureSpec.EXACTLY));
-        placement.x = Surface.dp(this, 12);
-        placement.y = Math.max(Surface.dp(this, 48), bottom - bubble.getMeasuredHeight() - Surface.dp(this, 12));
+        Preferences prefs = new Preferences(this);
+        BubblePosition.Point point;
+        if (dragging && dragPosition != null) point = BubblePosition.clamp(dragPosition.x(), dragPosition.y(), safeArea(), placement.width);
+        else if (prefs.hasBubblePosition()) point = BubblePosition.restore(prefs.bubblePosition(), safeArea(), placement.width);
+        else point = BubblePosition.clamp(screen.width() - placement.width - Surface.dp(this, 12),
+                bottom - placement.height - Surface.dp(this, 12), safeArea(), placement.width);
+        placement.x = point.x();
+        placement.y = point.y();
         int height = bubble.getMeasuredHeight();
         if (attached && (lastX != placement.x || lastY != placement.y || lastWidth != placement.width || lastHeight != height))
             manager.updateViewLayout(bubble, placement);
         lastX = placement.x; lastY = placement.y; lastWidth = placement.width; lastHeight = height;
+    }
+
+    private BubblePosition.Area safeArea() {
+        var metrics = manager.getCurrentWindowMetrics();
+        Rect screen = metrics.getBounds();
+        var insets = metrics.getWindowInsets().getInsetsIgnoringVisibility(
+                WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+        return new BubblePosition.Area(insets.left, insets.top, screen.width() - insets.right, screen.height() - insets.bottom);
     }
 
     private void show() {

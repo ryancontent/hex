@@ -12,15 +12,16 @@ Open Hex POC                             // android.setup
 ├── Check readiness -> service and installed offline languages
 │   └── Prepare offline language -> explicit Android-managed download if needed
 └── Enable floating dictation -> explanation -> Android Accessibility settings
-    └── Enable Hex floating dictation; leave Gboard / current keyboard selected
+    └── Use Hex floating dictation: on; Hex floating dictation shortcut: off
+        └── Android's extra shortcut H toggles the service; Hex's own H records
 
 Focus a supported text field with keyboard open  // android.dictation
-├── Small floating button -> above the keyboard, near the right edge
-│   ├── Tap -> record; next tap -> finish
-│   ├── Hold >= 350 ms -> record; release -> finish
-│   └── Slide off the same button -> cancel (recording or processing)
-├── One fixed button: green dot -> red stop symbol -> processing ellipsis
-│   └── Same bounds throughout; no separate recording icon, panel, or cancel button
+├── H bubble -> first placed above keyboard; user can drag it freely
+│   ├── Tap H once -> record; next tap -> finish (no intermediate control)
+│   ├── Hold still >= 350 ms -> record; release -> finish
+│   └── Drag -> reposition; cancel any current capture/processing without insertion
+├── One fixed-size button: H -> red stop symbol -> processing ellipsis
+│   └── Same bounds across phases, except deliberate dragging; no second control
 ├── On-device recognizer -> confirmed final text (no floating transcript preview)
 │   └── Same field, text and selection -> splice at cursor / replace selection
 ├── Changed field/text/selection, closed keyboard, lock screen, interrupted service -> cancel
@@ -59,9 +60,28 @@ has a uniquely known cursor at zero even if Accessibility reports `-1`.
 The single floating button is 60 dp in every phase. Successful insertion briefly
 shows a checkmark in that button; failures use an amber exclamation there and a
 short system toast. Phase/error text remains an Accessibility state description,
-not another floating view. A locked-recording stop commits on pointer release,
-so sliding outside the button can cancel before insertion. A normal tap during
-processing does not start another job; sliding off can still cancel it.
+not another floating view. A normal tap starts on release. A stationary hold
+starts after 350 ms, with a haptic when the recognizer is ready. Crossing Android's
+touch-slop threshold first selects dragging and never starts an idle recording.
+Dragging after a hold begins, during locked recording, or during processing
+cancels that attempt and moves the H; release does not insert. Changing fields
+also invalidates a pending hold before it can open the microphone.
+
+```ts
+Move H                                  // android.bubble-position
+├── Drag to any usable screen coordinate, including the keyboard region
+├── Release -> save normalized x/y in app preferences; no edge snapping
+├── Hide/show or service start -> restore saved position
+├── Screen size/orientation change -> rescale, clamp clear of bars/cutout
+└── Reset bubble position in Hex -> return above the keyboard
+```
+
+Position math lives in [`BubblePosition`](../../android/app/src/main/java/ly/anoma/hex/android/BubblePosition.java)
+and storage in [`Preferences`](../../android/app/src/main/java/ly/anoma/hex/android/Preferences.java).
+Android's Accessibility shortcut is a separate system-owned bubble. Hex does
+not request or reconfigure that shortcut; setup explains leaving the service on
+and its shortcut off. Removing that extra H requires the user to change the
+shortcut setting; the APK alone cannot silently remove it.
 
 ## Checks and observed proof
 
@@ -158,3 +178,29 @@ one green dot, red stop symbol, and grey ellipsis respectively, all in the same
 circular button above Gboard. Android's system microphone privacy indicator
 remains system-owned; Hex does not create a second recording overlay. These UI
 checks do not expand the physical-microphone proof stated above.
+
+## Version 0.5 direct H and placement verification
+
+On November 1, 2026, the user reported dictation working on their phone, with
+the remaining problem being a two-stage H/record-button interaction. The app's
+0.4 overlay was a non-draggable dot, so the separate draggable H is consistent
+with Android's service-toggle shortcut rather than Hex's recorder. The phone's
+shortcut settings were not inspected directly. Setup now explains **Use Hex
+floating dictation on; Hex floating dictation shortcut off**. Hex does not write
+those system settings itself.
+
+The 0.5 build passed **27 JVM tests and 16 emulator instrumentation tests**,
+including the real-model supplied-PCM tap/hold flow, offline recognizer, and
+virtual-microphone startup checks. Build, signature verification, and lint
+passed (no lint errors; existing dependency/localization warnings remain).
+The new UI check verifies the idle label is H, dragging it to the screen center
+does not dock to either edge or insert text, its saved position returns after
+Labs hides/shows it, and one tap on that moved H starts recording directly.
+The single-control/bounds and recording/processing cancellation checks still
+pass. Position unit tests cover persistence, display/cutout clamping, orientation
+rescaling, invalid stored floats, and small displays. Gesture tests distinguish
+pending taps, stationary holds, drag cancellation, and interrupted touches.
+
+The user's successful dictation report is separate from the automated proof:
+these runs do not independently verify the updated gesture timing, haptic,
+placement comfort, or removal of the system shortcut on their physical Pixel.

@@ -39,6 +39,7 @@ public class DeviceSmokeTest {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         preferences = new Preferences(context);
         preferences.setEnabled(false);
+        preferences.resetBubblePosition();
         device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
         previousIme = shell("settings get secure default_input_method").trim();
         previousServices = shell("settings get secure enabled_accessibility_services").trim();
@@ -163,7 +164,7 @@ public class DeviceSmokeTest {
         substituteRecognizer("SlowFixtureRecognitionService");
         var idle = device.findObject(By.desc("Start Hex dictation"));
         android.graphics.Rect bounds = idle.getVisibleBounds();
-        assertEquals("●", idle.getText());
+        assertEquals("H", idle.getText());
         assertOneFloatingControl();
         saveButtonProof("idle");
         idle.click();
@@ -205,6 +206,35 @@ public class DeviceSmokeTest {
         device.swipe(point.x, point.y, point.x - Surface.dp(context, 100), point.y, 15);
         assertTrue(device.wait(Until.hasObject(By.desc("Start Hex dictation")), 5_000));
         assertEquals("Hello world", device.findObject(By.desc("External first field")).getText());
+    }
+    @Test public void hBubbleDragsToTheCenterAndRemembersPositionWithoutRecording() throws Exception {
+        openExternalEditor();
+        var first = device.findObject(By.desc("Start Hex dictation"));
+        assertEquals("H", first.getText());
+        var from = first.getVisibleCenter();
+        int x = device.getDisplayWidth() / 2;
+        int y = device.getDisplayHeight() / 3;
+        device.swipe(from.x, from.y, x, y, 25);
+        assertTrue(device.wait(Until.hasObject(By.desc("Start Hex dictation")), 5_000));
+        var moved = device.findObject(By.desc("Start Hex dictation")).getVisibleCenter();
+        assertTrue("Free x position, no side snapping", Math.abs(moved.x - x) < Surface.dp(context, 12));
+        assertTrue("Free y position", Math.abs(moved.y - y) < Surface.dp(context, 12));
+        assertTrue(preferences.hasBubblePosition());
+        saveButtonProof("dragged");
+        assertFalse(device.hasObject(By.desc("Stop Hex dictation")));
+        assertEquals("Hello world", device.findObject(By.desc("External first field")).getText());
+        preferences.setEnabled(false);
+        assertTrue(device.wait(Until.gone(By.desc("Start Hex dictation")), 5_000));
+        preferences.setEnabled(true);
+        assertTrue(device.wait(Until.hasObject(By.desc("Start Hex dictation")), 5_000));
+        assertEquals(moved, device.findObject(By.desc("Start Hex dictation")).getVisibleCenter());
+        saveButtonProof("restored");
+        assertOneFloatingControl();
+        substituteRecognizer();
+        device.findObject(By.desc("Start Hex dictation")).click();
+        assertTrue("One H tap starts recording, no intermediate control", device.wait(Until.hasObject(By.desc("Stop Hex dictation")), 5_000));
+        device.findObject(By.desc("Stop Hex dictation")).click();
+        assertTrue(device.wait(Until.hasObject(By.text("Hello lovely world")), 8_000));
     }
     private void saveButtonProof(String phase) throws Exception {
         if (!InstrumentationRegistry.getArguments().getString("captureButtonProof", "false").equals("true")) return;

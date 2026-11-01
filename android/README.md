@@ -3,9 +3,9 @@
 An independent native Android experiment for a Pixel 8 Pro (Android 12+).
 Keep Gboard or your preferred keyboard. Hex shows a floating button only when a
 supported text field has input focus **and its keyboard is open**, using an
-explicitly enabled Accessibility service. Version `0.4.0-poc` puts every
-recording/processing indication into one fixed-size button. The APK does not
-register an input method.
+explicitly enabled Accessibility service. Version `0.5.0-poc` makes the H bubble
+the direct recorder and lets you drag it freely across the screen. Its saved
+position is not snapped to an edge. The APK does not register an input method.
 
 ## Try it
 
@@ -17,17 +17,27 @@ Install the debug APK, open **Hex POC**, then:
    BCP-47 language tag. **Prepare offline language** requests an Android-managed
    model download; recheck readiness after it finishes.
 3. Read the Accessibility explanation and tap **Enable floating dictation**.
-   Under Android Accessibility settings, enable **Hex floating dictation**.
+   Under Android Accessibility settings, leave **Use Hex floating dictation**
+   **on** and turn **Hex floating dictation shortcut** **off**. The shortcut is
+   Android's extra H launcher: tapping it toggles the service, so it can create
+   the unwanted H → record-button flow. Hex's own H is the recorder. The app
+   cannot change that system shortcut selection for you.
    A sideloaded APK can encounter Android's restricted-settings protection:
    if blocked, open Hex POC's App info, use the menu's **Allow restricted
    settings** option if offered, then return to Accessibility settings.
-4. Open a text field in another app and show its keyboard. A small green Hex
-   button appears above the keyboard near the right edge. Dismiss the keyboard
-   or leave the field and the button disappears entirely. Your keyboard stays unchanged.
-5. **Tap** the button to start and **tap again** to finish. Or **hold** it while
-   speaking and **release** to finish (350 ms distinguishes a hold from a tap).
-   Slide off before releasing to cancel, including a locked recording or processing.
-   The same button changes from a green dot to a red stop symbol while recording,
+4. Open a text field in another app and show its keyboard. Hex's green **H**
+   appears above the keyboard on first use. **Drag it anywhere in the usable
+   screen**, including over the keyboard if you prefer. Its position is remembered
+   when hidden, when the service restarts, and across launches. There is no side
+   docking. **Reset bubble position** in Hex restores the initial location.
+   Dismiss the keyboard or leave the field and the H disappears entirely.
+5. **Tap H once** to start and **tap again** to finish. Or **hold still** until
+   it turns red (350 ms), speak, and **release** to finish. A short vibration
+   when the microphone is ready respects Android's haptic settings.
+   Movement before the hold threshold is a drag, with no recording. Moving after
+   a hold starts, or dragging a locked recording/processing attempt, cancels that
+   attempt without insertion and moves the bubble instead.
+   The same button changes from H to a red stop symbol while recording,
    then an ellipsis while processing. It never expands or adds another floating
    control. A brief checkmark confirms insertion; an amber exclamation and a
    system toast explain a failure.

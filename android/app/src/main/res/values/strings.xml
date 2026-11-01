@@ -1,4 +1,4 @@
 <resources>
-    <string name="accessibility_summary">One floating button to record and finish, while keeping your keyboard.</string>
+    <string name="accessibility_summary">Tap the H to dictate. Drag it anywhere. Keep the service on and its Android shortcut off.</string>
     <string name="accessibility_description">Hex uses Accessibility to detect the selected editable field, show a floating dictation button, and insert your words at its cursor. After you start recording, Hex reads that field’s text and selection to preserve its contents. It does not save or send field contents, recordings, or transcripts. Password fields are excluded. Tap the button to start and again to finish, or hold it and release to finish. Turn off this service to remove the button.</string>
 </resources>

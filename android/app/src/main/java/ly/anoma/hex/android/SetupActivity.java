@@ -126,8 +126,12 @@ public final class SetupActivity extends Activity {
         root.addView(Surface.text(this, "Use in other apps", 20, true));
         root.addView(Surface.text(this,
                 "Enable Hex floating dictation in Accessibility settings. Your keyboard stays selected. "
-                + "Focus a text field: tap the floating button to start and tap again to finish, "
-                + "or hold it while speaking and release to finish. Slide off the button to cancel. "
+                + "Leave Use Hex floating dictation on and turn Hex floating dictation shortcut off. "
+                + "The shortcut is Android’s extra H launcher, not the recorder. "
+                + "Focus a text field: tap Hex’s H bubble to record and tap again to finish, "
+                + "or hold still until it turns red, speak, and release to finish. "
+                + "Drag the H anywhere on screen to move it; its position is remembered. "
+                + "Dragging cancels a recording or processing attempt without inserting text. "
                 + "The same button turns red while recording and shows an ellipsis while processing.", 15, false));
         root.addView(Surface.text(this,
                 "Accessibility lets Hex find the selected field and insert at its cursor. "
@@ -136,6 +140,7 @@ public final class SetupActivity extends Activity {
                 + "If you edit or change fields during recording, Hex cancels the result.", 14, false));
         root.addView(Surface.button(this, "Enable floating dictation", view ->
                 startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
+        root.addView(Surface.button(this, "Reset bubble position", view -> new Preferences(this).resetBubblePosition()));
         root.addView(Surface.text(this, "Proof limits", 20, true));
         root.addView(Surface.text(this,
                 "No Parakeet or desktop sync in this build. Some custom text fields do not support Accessibility insertion. "

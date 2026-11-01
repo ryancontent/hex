@@ -17,6 +17,7 @@ import java.util.ArrayList;
 /** All access, including callbacks, is on the main thread. Never creates a cloud recognizer. */
 final class SpeechSession {
     interface Listener {
+        default void ready() { }
         void status(String text);
         void partial(String text);
         void result(String text, long finishMillis);
@@ -79,7 +80,10 @@ final class SpeechSession {
             recognizer.setRecognitionListener(new RecognitionListener() {
                 private boolean current() { return generation == token && active(); }
                 @Override public void onReadyForSpeech(Bundle params) {
-                    if (current() && !stopping) listener.status("Listening… Speak, then tap Stop.");
+                    if (current() && !stopping) {
+                        listener.ready();
+                        listener.status("Listening… Speak, then tap Stop.");
+                    }
                 }
                 @Override public void onBeginningOfSpeech() { }
                 @Override public void onRmsChanged(float rmsdB) { }
