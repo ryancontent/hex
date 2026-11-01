@@ -1,3 +1,14 @@
+# Android Fork Workflow
+
+This checkout belongs to `ryancontent/hex`, an Android development fork of
+`anomalyco/hex`. The fork's default branch is `android`; `origin` is the fork
+and `upstream` is the original project. Keep Android work on the fork. Do not
+open an upstream PR or publish a release unless the user explicitly requests it.
+The original project's `dev`/`production` release and PR rules below apply when
+working on those upstream branches, not to this fork's `android` branch.
+Read [FORK.md](FORK.md), [android/README.md](android/README.md), and the Android
+feature map before changing the mobile app. Preserve upstream licence notices.
+
 <!-- tallow -->
 # Hex Agent Guide
 

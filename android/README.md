@@ -39,7 +39,7 @@ Install the debug APK, open **Hex POC**, then:
    attempt without insertion and moves the bubble instead.
    The same button changes from the Hex mark to warm braided dots while listening,
    then blue flowing dots while processing. It never expands or adds another floating
-   control. A brief checkmark confirms insertion; an amber exclamation and a
+   control. A brief checkmark confirms insertion; a coral exclamation and a
    system toast explain a failure.
 6. Final words are inserted at the cursor, replacing only selected text. If you
    change fields, close the keyboard, edit text, move the cursor, or lock the screen during capture,
@@ -159,3 +159,22 @@ The single 60 dp control uses the desktop dark plate, nested Hex mark, warm pear
 listening dots and blue processing flow. Speech-service RMS callbacks shape the
 braided trace; silent or stale input settles to a flat line. Android disabled
 animations keep a static scope. Frames stop when the overlay is detached or idle.
+
+## Iterate in T3 Code
+
+Enable **Settings → Devices → Use devices** and **Agents can use devices**, then
+restart T3 if the agent session predates that change. Open `Hex_Pixel_API_35`
+through T3's device tools and install the debug APK into the Device panel.
+Use the device-bound `agent-device` command returned by `device_open` for UI work;
+`open` supports `--no-test-ime` to keep Gboard visible.
+
+The current T3 launcher passes `-no-audio`, so the panel is suitable for UI and
+recorded-PCM tests, not live host-microphone dictation. Its Android snapshot
+helper can suppress other Accessibility services. Close the agent's own
+`agent-device` session before manual bubble testing; Android should then list
+Hex among the bound Accessibility services. Do not turn the service off and on
+repeatedly to work around an active automation connection.
+
+The test runner may reinstall the app, clearing its settings and permissions.
+After tests, reinstall the current APK and restore Labs, microphone permission,
+and the Accessibility service before manual testing. Keep its system shortcut off.

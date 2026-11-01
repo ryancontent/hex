@@ -1,3 +1,8 @@
+> **Android development fork:** this repository adds a native Android floating
+> dictation app to [anomalyco/hex](https://github.com/anomalyco/hex).
+> Start with the [Android guide](android/README.md) and [fork notes](FORK.md).
+> The desktop downloads below belong to upstream; they do not include this Android experiment.
+
 <p align="center">
   <img src=".github/assets/hex-icon.png" width="96" height="96" alt="Hex app icon" />
 </p>
